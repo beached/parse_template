@@ -58,15 +58,10 @@ link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
 include_directories( SYSTEM ${Boost_INCLUDE_DIRS} )
 link_directories( ${Boost_LIBRARY_DIRS} )
 
-add_library ( parse_template SHARED ${HEADER_FILES} ${SOURCE_FILES} )
+add_library ( parse_template STATIC ${HEADER_FILES} ${SOURCE_FILES} )
 add_dependencies( parse_template header_libraries_prj char_range_prj )
 target_link_libraries( parse_template char_range ${Boost_Libraries} )
 
-add_library ( parse_template_static STATIC ${HEADER_FILES} ${SOURCE_FILES} )
-add_dependencies( parse_template_static header_libraries_prj char_range_prj )
-target_link_libraries( parse_template char_range_static ${Boost_Libraries} )
-
 install( TARGETS parse_template DESTINATION lib )
-install( TARGETS parse_template_static DESTINATION lib )
 install( DIRECTORY ${HEADER_FOLDER}/ DESTINATION include/daw/parse_template )
 
