@@ -69,6 +69,4 @@ target_link_libraries( parse_template char_range_static ${Boost_Libraries} )
 install( TARGETS parse_template DESTINATION lib )
 install( TARGETS parse_template_static DESTINATION lib )
 install( DIRECTORY ${HEADER_FOLDER}/ DESTINATION include/daw/parse_template )
-install( DIRECTORY ${CMAKE_BINARY_DIR}/install/lib/ DESTINATION lib )
-install( DIRECTORY ${CMAKE_BINARY_DIR}/install/include/ DESTINATION include )
 
