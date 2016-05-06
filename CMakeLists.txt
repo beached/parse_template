@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 2.8.0 )
 
-project( parse_template )
+project( parse_template_prj )
 
 include( ExternalProject )
 
