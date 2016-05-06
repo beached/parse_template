@@ -30,8 +30,8 @@ set( SOURCE_FILES
 	daw_parse_template.cpp
  )
 
-ExternalProject_Add( 
-	header_libraries
+externalproject_add( 
+	header_libraries_prj
 	GIT_REPOSITORY "https://github.com/beached/header_libraries.git"
 	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/header_libraries"
 	GIT_TAG "master"
@@ -41,8 +41,8 @@ ExternalProject_Add(
 	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
 )
 
-ExternalProject_Add(
-	char_range
+externalproject_add(
+	char_range_prj
 	GIT_REPOSITORY "https://github.com/beached/char_range.git"
 	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/char_range"
 	GIT_TAG "master"
@@ -58,9 +58,17 @@ link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
 include_directories( SYSTEM ${Boost_INCLUDE_DIRS} )
 link_directories( ${Boost_LIBRARY_DIRS} )
 
-add_library( parse_template SHARED ${HEADER_FILES} ${SOURCE_FILES} )
-add_library( parse_template_static STATIC ${HEADER_FILES} ${SOURCE_FILES} )
+add_library ( parse_template SHARED ${HEADER_FILES} ${SOURCE_FILES} )
+add_dependencies( parse_template header_libraries_prj char_range_prj )
+target_link_libraries( parse_template char_range ${Boost_Libraries} )
+
+add_library ( parse_template_static STATIC ${HEADER_FILES} ${SOURCE_FILES} )
+add_dependencies( parse_template_static header_libraries_prj char_range_prj )
+target_link_libraries( parse_template char_range_static ${Boost_Libraries} )
+
 install( TARGETS parse_template DESTINATION lib )
 install( TARGETS parse_template_static DESTINATION lib )
 install( DIRECTORY ${HEADER_FOLDER}/ DESTINATION include/daw/parse_template )
+install( DIRECTORY ${CMAKE_BINARY_DIR}/install/lib/ DESTINATION lib )
+install( DIRECTORY ${CMAKE_BINARY_DIR}/install/include/ DESTINATION include )
 
