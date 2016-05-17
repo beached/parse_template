@@ -30,6 +30,10 @@
 namespace daw {
 	namespace parse_template {
 		namespace impl {
+			void localtime_s( std::time_t const * source, struct tm* result ) {
+				localtime_r( source, result );
+			}
+
 			size_t CallbackMap::size( ) const {
 				return beginnings.size( );
 			}
