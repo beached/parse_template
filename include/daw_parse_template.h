@@ -33,13 +33,15 @@
 
 #include <daw/char_range/daw_char_range.h>
 
+#ifndef WIN32
+void localtime_s( std::time_t const * source, struct tm* result );
+#endif	// WIN32
+
 namespace daw {
 	namespace parse_template {
 		class ParseTemplate;
 
 		namespace impl {
-			void localtime_s( std::time_t const * source, struct tm* result );
-
 			struct CallbackMap {
 				using iterator = typename range::CharRange::iterator;
 				enum class CallbackTypes { Normal, Date, Time, DateFormat, TimeFormat, Repeat, Unknown };
@@ -143,7 +145,7 @@ namespace daw {
 					{
 						std::time_t t = std::time( nullptr );
 						std::tm result;
-						impl::localtime_s( &t, &result );
+						localtime_s( &t, &result );
 						out_stream << std::put_time( &result, dte_format.c_str( ) );
 					}
 					break;
@@ -151,7 +153,7 @@ namespace daw {
 					{
 						std::time_t t = std::time( nullptr );
 						std::tm tm = { 0 };
-						impl::localtime_s( &t, &tm );
+						localtime_s( &t, &tm );
 						out_stream << std::put_time( &tm, tm_format.c_str( ) );
 					}
 					break;
