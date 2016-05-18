@@ -27,13 +27,14 @@
 #include "daw_parse_template.h"
 #include <cassert>
 
-#ifndef WIN32
-void localtime_s( std::time_t const * source, struct tm* result ) {
-	localtime_r( source, result );
-}
-#endif	// WIN32
-
 namespace daw {
+	void localtime_s( std::time_t const * source, struct tm* result ) {
+	#ifndef WIN32
+		localtime_r( source, result );
+	#else
+		localtime_s( result, source );
+	#endif	// WIN32
+	}
 	namespace parse_template {
 		namespace impl {
 			size_t CallbackMap::size( ) const {
