@@ -36,23 +36,23 @@ set( SOURCE_FILES
 externalproject_add( 
 	header_libraries_prj
 	GIT_REPOSITORY "https://github.com/beached/header_libraries.git"
-	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/header_libraries"
 	GIT_TAG "master"
-	PATCH_COMMAND ""
+	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/header_libraries"
 	INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
-	TEST_COMMAND ""
 	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
+	PATCH_COMMAND ""
+	TEST_COMMAND ""
 )
 
 externalproject_add(
 	char_range_prj
 	GIT_REPOSITORY "https://github.com/beached/char_range.git"
-	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/char_range"
 	GIT_TAG "master"
-	PATCH_COMMAND ""
+	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/char_range"
 	INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
-	TEST_COMMAND ""
 	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
+	PATCH_COMMAND ""
+	TEST_COMMAND ""
 )
 
 include_directories( SYSTEM "${CMAKE_BINARY_DIR}/install/include" )
