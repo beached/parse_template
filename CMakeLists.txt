@@ -38,8 +38,8 @@ externalproject_add(
 	GIT_REPOSITORY "https://github.com/beached/header_libraries.git"
 	GIT_TAG "master"
 	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/header_libraries"
-	INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
-	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
+	INSTALL_DIR "${CMAKE_BINARY_DIR}/inst"
+	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/inst
 	PATCH_COMMAND ""
 	TEST_COMMAND ""
 )
@@ -49,14 +49,14 @@ externalproject_add(
 	GIT_REPOSITORY "https://github.com/beached/char_range.git"
 	GIT_TAG "master"
 	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/char_range"
-	INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
-	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
+	INSTALL_DIR "${CMAKE_BINARY_DIR}/inst"
+	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/inst
 	PATCH_COMMAND ""
 	TEST_COMMAND ""
 )
 
-include_directories( SYSTEM "${CMAKE_BINARY_DIR}/install/include" )
-link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
+include_directories( SYSTEM "${CMAKE_BINARY_DIR}/inst/include" )
+link_directories( "${CMAKE_BINARY_DIR}/inst/lib" )
 
 include_directories( SYSTEM ${Boost_INCLUDE_DIRS} )
 link_directories( ${Boost_LIBRARY_DIRS} )
