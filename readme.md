@@ -1,4 +1,4 @@
-﻿A library that accepts a UTF-8 text template and generates text(e.g. html)
+A library that accepts a UTF-8 text template and generates text(e.g. html)
 
 
 Template Tags
