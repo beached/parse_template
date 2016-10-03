@@ -28,7 +28,7 @@
 #include <cassert>
 
 namespace daw {
-	void localtime_s( std::time_t const * source, struct tm* result ) {
+	void daw_localtime_s( std::time_t const * source, struct tm* result ) {
 	#ifndef WIN32
 		localtime_r( source, result );
 	#else

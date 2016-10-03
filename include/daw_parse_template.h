@@ -34,7 +34,7 @@
 
 
 namespace daw {
-	void localtime_s( std::time_t const * source, struct tm* result );
+	void daw_localtime_s( std::time_t const * source, struct tm* result );
 	namespace parse_template {
 		class ParseTemplate;
 
@@ -142,7 +142,7 @@ namespace daw {
 					{
 						std::time_t t = std::time( nullptr );
 						std::tm result;
-						::daw::localtime_s( &t, &result );
+						::daw::daw_localtime_s( &t, &result );
 						out_stream << std::put_time( &result, dte_format.c_str( ) );
 					}
 					break;
@@ -150,7 +150,7 @@ namespace daw {
 					{
 						std::time_t t = std::time( nullptr );
 						std::tm tm = { 0 };
-						::daw::localtime_s( &t, &tm );
+						::daw::daw_localtime_s( &t, &tm );
 						out_stream << std::put_time( &tm, tm_format.c_str( ) );
 					}
 					break;
