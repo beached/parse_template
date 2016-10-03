@@ -25,7 +25,6 @@ set( HEADER_FOLDER "include" )
 include_directories( ${HEADER_FOLDER} )
 
 set( HEADER_FILES
-	${HEADER_FOLDER}/daw_template.h
 	${HEADER_FOLDER}/daw_parse_template.h
  )
 
