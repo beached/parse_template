@@ -222,5 +222,10 @@ namespace daw {
 		ParseTemplate create_parse_template( Iterator Begin, Iterator End ) {
 			return ParseTemplate( range::create_char_range( Begin, End ) );
 		}
+
+		template<typename String>
+		ParseTemplate create_parse_template( String const & str ) {
+			return ParseTemplate( str.begin( ), str.end( ) );
+		}
 	}	// namespace parse_template
 }	// namespace daw
