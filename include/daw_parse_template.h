@@ -225,7 +225,7 @@ namespace daw {
 
 		template<typename String>
 		ParseTemplate create_parse_template( String const & str ) {
-			return ParseTemplate( str.begin( ), str.end( ) );
+			return create_parse_template( str.begin( ), str.end( ) );
 		}
 	}	// namespace parse_template
 }	// namespace daw
