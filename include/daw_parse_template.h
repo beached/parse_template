@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #pragma once
+
+#include <boost/utility/string_ref.hpp>
 #include <unordered_map>
 #include <vector>
 #include <future>
@@ -216,6 +218,10 @@ namespace daw {
 				add_callback_impl( callback_name, cb );
 			}
 
+			template<typename CallbackFunction>
+			void add_callback( boost::string_ref callback_name, CallbackFunction && callback ) {
+				add_callback( daw::range::create_char_range( callback_name.begin( ), callback_name.end( ) ), std::forward<CallbackFunction>( callback ) );
+			}
 		};	// class ParseTemplate
 
 		template<typename Iterator>
