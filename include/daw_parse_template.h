@@ -219,7 +219,7 @@ namespace daw {
 		};	// class ParseTemplate
 
 		template<typename Iterator>
-		ParseTemplate createa_parse_template( Iterator Begin, Iterator End ) {
+		ParseTemplate create_parse_template( Iterator Begin, Iterator End ) {
 			return ParseTemplate( range::create_char_range( Begin, End ) );
 		}
 	}	// namespace parse_template
