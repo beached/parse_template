@@ -220,12 +220,12 @@ namespace daw {
 
 		template<typename Iterator>
 		ParseTemplate create_parse_template( Iterator Begin, Iterator End ) {
-			return ParseTemplate( range::create_char_range( Begin, End ) );
+			return ParseTemplate( daw::range::create_char_range( Begin, End ) );
 		}
 
 		template<typename String>
 		ParseTemplate create_parse_template( String const & str ) {
-			return create_parse_template( str.begin( ), str.end( ) );
+			return ParseTemplate( daw::range::create_char_range( str ) );
 		}
 	}	// namespace parse_template
 }	// namespace daw
