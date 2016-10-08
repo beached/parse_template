@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <boost/utility/string_ref.hpp>
+#include <boost/utility/string_view.hpp>
 #include <unordered_map>
 #include <vector>
 #include <future>
@@ -219,7 +219,7 @@ namespace daw {
 			}
 
 			template<typename CallbackFunction>
-			void add_callback( boost::string_ref callback_name, CallbackFunction && callback ) {
+			void add_callback( boost::string_view callback_name, CallbackFunction && callback ) {
 				add_callback( daw::range::create_char_range( callback_name.begin( ), callback_name.end( ) ), std::forward<CallbackFunction>( callback ) );
 			}
 		};	// class ParseTemplate

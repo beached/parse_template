@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include <algorithm>
+#include <boost/utility/string_view.hpp>
 #include <future>
 #include <sstream>
 
@@ -135,7 +136,7 @@ namespace daw {
 			}
 
 			template<typename Iterator>
-			Iterator find_string( Iterator first, Iterator last, boost::string_ref value ) {
+			Iterator find_string( Iterator first, Iterator last, boost::string_view value ) {
 				auto result_it = std::find( first, last, *value.begin( ) );
 				while( result_it != last ) {
 
@@ -215,7 +216,7 @@ namespace daw {
 				return result;
 			};
 
-			auto find_tags = [&]( auto first, auto const & last, boost::string_ref open_tag, boost::string_ref close_tag ) {
+			auto find_tags = [&]( auto first, auto const & last, boost::string_view open_tag, boost::string_ref close_tag ) {
 				while( first != last ) {
 					first = find_string( first, last, open_tag );
 					if( first == last ) {
