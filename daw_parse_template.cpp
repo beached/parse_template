@@ -216,7 +216,7 @@ namespace daw {
 				return result;
 			};
 
-			auto find_tags = [&]( auto first, auto const & last, boost::string_view open_tag, boost::string_ref close_tag ) {
+			auto find_tags = [&]( auto first, auto const & last, boost::string_view open_tag, boost::string_view close_tag ) {
 				while( first != last ) {
 					first = find_string( first, last, open_tag );
 					if( first == last ) {
