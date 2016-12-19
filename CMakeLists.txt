@@ -7,7 +7,7 @@ include( ExternalProject )
 find_package( Boost 1.58.0 COMPONENTS system filesystem regex unit_test_framework REQUIRED )
 
 if( ${CMAKE_CXX_COMPILER_ID} STREQUAL 'MSVC' )
-	add_compile_options( -D_WIN32_WINNT=0x0601 ) 
+	add_compile_options( -D_WIN32_WINNT=0x0601 /std:c++latest ) 
 else( )
 	find_package( Threads REQUIRED )
 	if( THREADS_HAVE_PTHREAD_ARG )
