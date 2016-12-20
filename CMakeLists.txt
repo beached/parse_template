@@ -5,6 +5,7 @@ project( parse_template_prj )
 include( ExternalProject )
 
 find_package( Boost 1.58.0 COMPONENTS system filesystem regex unit_test_framework REQUIRED )
+add_definitions( -DBOOST_ALL_NO_LIB -DBOOST_ALL_DYN_LINK )
 
 if( ${CMAKE_CXX_COMPILER_ID} STREQUAL 'MSVC' )
 	add_compile_options( -D_WIN32_WINNT=0x0601 /std:c++latest ) 
