@@ -27,7 +27,7 @@
 #include <iomanip>
 #include <numeric>
 #include <string>
-#include <time.h>
+#include <ctime>
 #include <unordered_map>
 #include <vector>
 
@@ -109,15 +109,15 @@ namespace daw {
 			ParseTemplate &operator=( ParseTemplate const &rhs );
 			ParseTemplate &operator=( ParseTemplate && ) noexcept = default;
 			ParseTemplate( range::CharRange template_string );
+
 			void generate_callbacks( );
 			std::string process_template_to_string( );
 
 			template<typename Stream>
 			void process_template( Stream &out_stream ) {
 				auto show_string = []( auto &stream, range::CharIterator first, range::CharIterator const last ) {
-
-					for( ; first != last; ++first ) {
-						stream << *first;
+					while( first != last ) {
+						stream << *first++;
 					}
 					return first;
 				};
@@ -133,46 +133,51 @@ namespace daw {
 					case impl::CallbackMap::CallbackTypes::Normal: {
 						if( m_callback_map->arguments[n].size( ) != 1 ) {
 							out_stream << "Error, invalid arguments, expected 1, at position "
-							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << "\n";
+							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
 							break;
 						}
 						auto const &cb_name = m_callback_map->arguments[n][0];
 						if( !cb_name.empty( ) && callback_exists( cb_name ) && m_callbacks[to_string( cb_name )].cb_normal ) {
 							out_stream << m_callbacks[to_string( cb_name )].cb_normal( );
 						}
-					} break;
+						break;
+					}
 					case impl::CallbackMap::CallbackTypes::Date: {
 						std::time_t t = std::time( nullptr );
 						std::tm result;
 						::daw::daw_localtime_s( &t, &result );
 						out_stream << std::put_time( &result, dte_format.c_str( ) );
-					} break;
+						break;
+					}
 					case impl::CallbackMap::CallbackTypes::Time: {
-						std::time_t t = std::time( nullptr );
-						std::tm tm = {0};
-						::daw::daw_localtime_s( &t, &tm );
+						std::time_t t{0};
+						std::tm tm{0};
+						daw::daw_localtime_s( &t, &tm );
 						out_stream << std::put_time( &tm, tm_format.c_str( ) );
-					} break;
-					case impl::CallbackMap::CallbackTypes::DateFormat:
+						break;
+					}
+					case impl::CallbackMap::CallbackTypes::DateFormat: {
 						if( m_callback_map->arguments[n].size( ) != 1 ) {
 							out_stream << "Error, invalid arguments, expected 1, at position "
-							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << "\n";
+							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
 							break;
 						}
 						dte_format = to_string( m_callback_map->arguments[n][0] );
 						break;
-					case impl::CallbackMap::CallbackTypes::TimeFormat:
+					}
+					case impl::CallbackMap::CallbackTypes::TimeFormat: {
 						if( m_callback_map->arguments[n].size( ) != 1 ) {
 							out_stream << "Error, invalid arguments, expected 1, at position "
-							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << "\n";
+							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
 							break;
 						}
 						tm_format = to_string( m_callback_map->arguments[n][0] );
 						break;
+					}
 					case impl::CallbackMap::CallbackTypes::Repeat: {
 						if( m_callback_map->arguments[n].empty( ) ) {
 							out_stream << "Error, invalid arguments, expected 1, at position "
-							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << "\n";
+							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
 							break;
 						}
 						auto const &cb_name = m_callback_map->arguments[n][0];
@@ -189,16 +194,18 @@ namespace daw {
 							for( auto const &line : tmp ) {
 								out_stream << prefix << line << postfix;
 								if( count-- > 1 ) {
-									out_stream << "\n";
+									out_stream << '\n';
 								}
 							}
 						}
-					} break;
-					case impl::CallbackMap::CallbackTypes::Unknown:
-						out_stream << "Error, unknown tag at position "
-						           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << "\n";
 						break;
 					}
+					case impl::CallbackMap::CallbackTypes::Unknown:
+						out_stream << "Error, unknown tag at position "
+						           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
+						break;
+					}
+
 					pos = m_callback_map->endings[n].base( );
 				}
 				show_string( out_stream, pos, m_template.end( ).base( ) );
@@ -235,3 +242,4 @@ namespace daw {
 		}
 	} // namespace parse_template
 } // namespace daw
+

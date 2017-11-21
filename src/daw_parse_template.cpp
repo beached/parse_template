@@ -25,8 +25,8 @@
 #include <future>
 #include <sstream>
 
-#include <daw/daw_string_view.h>
 #include "daw_parse_template.h"
+#include <daw/daw_string_view.h>
 
 namespace daw {
 	void daw_localtime_s( std::time_t const *source, struct tm *result ) {
@@ -215,7 +215,7 @@ namespace daw {
 				return result;
 			};
 
-			auto find_tags = [&]( auto first, auto const &last, daw::string_view open_tag, daw::string_view close_tag ) {
+			auto find_tags = [&]( auto first, auto const last, daw::string_view open_tag, daw::string_view close_tag ) {
 				while( first != last ) {
 					first = find_string( first, last, open_tag );
 					if( first == last ) {
@@ -258,11 +258,11 @@ namespace daw {
 		}
 
 		std::vector<std::string> ParseTemplate::list_callbacks( ) const {
-			std::vector<std::string> result;
+			std::vector<std::string> result{};
 			result.reserve( m_callbacks.size( ) );
 
-			std::transform( m_callbacks.begin( ), m_callbacks.end( ), std::back_inserter( result ),
-			                []( typename decltype( m_callbacks )::value_type item ) { return item.first; } );
+			std::transform( m_callbacks.cbegin( ), m_callbacks.cend( ), std::back_inserter( result ),
+			                []( auto item ) { return item.first; } );
 
 			return result;
 		}
@@ -285,3 +285,4 @@ namespace daw {
 		}
 	} // namespace parse_template
 } // namespace daw
+
