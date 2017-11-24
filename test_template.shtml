@@ -1,0 +1,27 @@
+<html>
+<head>
+<title>Test HTML</title>
+</head>
+<body>
+<p>
+    Today's date is <%date%>.<br>
+</p>
+<p>
+    The current time is <%time%>.<br>
+</p>
+<p>
+The current timestamp is <%timestamp%>.<br>
+The current timestamp is <%timestamp args="%T"%>.<br>
+The current timestamp is <%timestamp args="%T,CST"%>.<br>
+</p>
+<p>
+Some dummy test<pre><%call args="dummy_text_cb"%></pre>
+</p>
+<p>
+    Some more dummy text<pre><%call args="dummy_text_cb2,1,3,\"hello\""%></pre>
+</p>
+<ol>
+	<%call args="repeat_test,5,\"<li>\",\"</li>\""%>
+</ol>
+</body>
+</html>

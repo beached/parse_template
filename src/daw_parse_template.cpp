@@ -20,269 +20,236 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include <algorithm>
-#include <cassert>
-#include <future>
-#include <sstream>
+#include <date/date.h>
 
-#include "daw_parse_template.h"
+#include <date/tz.h>
 #include <daw/daw_string_view.h>
 
+#include "daw_parse_template.h"
+
 namespace daw {
-	void daw_localtime_s( std::time_t const *source, struct tm *result ) {
-#ifndef WIN32
-		localtime_r( source, result );
-#else
-		localtime_s( result, source );
-#endif // WIN32
+	void parse_template::process_text( daw::string_view str ) {
+		struct raw_text_func {
+			daw::string_view str;
+
+			std::string operator( )( ) const noexcept {
+				return str.to_string( );
+			}
+		};
+		m_doc_builder.emplace_back( raw_text_func{str} );
 	}
-	namespace parse_template {
-		namespace impl {
-			size_t CallbackMap::size( ) const {
-				return beginnings.size( );
-			}
 
-			void CallbackMap::clear( ) {
-				beginnings.clear( );
-				endings.clear( );
-				types.clear( );
-				arguments.clear( );
-			}
+	void parse_template::process_template( daw::string_view template_str ) {
 
-			void CallbackMap::add( CallbackMap::iterator beginning, CallbackMap::iterator ending,
-			                       CallbackMap::CallbackTypes callback_type ) {
-				beginnings.push_back( beginning );
-				endings.push_back( ending );
-				types.push_back( callback_type );
-				arguments.emplace_back( std::vector<range::CharRange>{} );
-			}
+		auto cur_pos = template_str.find( "<%" );
+		process_text( template_str.substr( 0, cur_pos ) );
+		template_str.remove_prefix( cur_pos );
+		template_str.remove_prefix( 2 );
+		while( !template_str.empty( ) ) {
+			cur_pos = template_str.find( "%>" );
 
-			void CallbackMap::add( CallbackMap::iterator beginning, CallbackMap::iterator ending,
-			                       CallbackMap::CallbackTypes callback_type, std::vector<range::CharRange> argument ) {
-				beginnings.push_back( beginning );
-				endings.push_back( ending );
-				types.push_back( callback_type );
-				arguments.push_back( std::move( argument ) );
-			}
+			daw::exception::daw_throw_on_false( 0 < cur_pos && cur_pos != template_str.npos, "Unexpected empty tag" );
+			parse_tag( template_str.substr( 0, cur_pos ) );
+			template_str.remove_prefix( cur_pos );
+			template_str.remove_prefix( 2 );
 
-			void CallbackMap::sort( ) {
-				auto perm = helpers::sort_permutation( beginnings, []( auto const &A, auto const &B ) { return *A < *B; } );
-				helpers::wait_for_all(
-				  {std::async( std::launch::async, [&]( ) { helpers::apply_permutation( beginnings, perm ); } ),
-				   std::async( std::launch::async, [&]( ) { helpers::apply_permutation( endings, perm ); } ),
-				   std::async( std::launch::async, [&]( ) { helpers::apply_permutation( types, perm ); } ),
-				   std::async( std::launch::async, [&]( ) { helpers::apply_permutation( arguments, perm ); } )} );
-			}
-		} // namespace impl
-
-		ParseTemplate::ParseTemplate( ParseTemplate const &other )
-		  : m_callbacks( other.m_callbacks )
-		  , m_template( other.m_template )
-		  , m_callback_map( std::make_unique<impl::CallbackMap>( *other.m_callback_map ) ) {
-
-			generate_callbacks( );
+			cur_pos = template_str.find( "<%" );
+			process_text( template_str.substr( 0, cur_pos ) );
+			template_str.remove_prefix( cur_pos );
+			template_str.remove_prefix( 2 );
 		}
+	}
 
-		ParseTemplate &ParseTemplate::operator=( ParseTemplate const &rhs ) {
-			if( this != &rhs ) {
-				m_callbacks = rhs.m_callbacks;
-				m_template = rhs.m_template;
-				m_callback_map = std::make_unique<impl::CallbackMap>( *rhs.m_callback_map );
-			}
-			return *this;
+	void parse_template::parse_tag( daw::string_view tag ) {
+		using namespace daw::string_view_literals;
+		while( !tag.empty( ) && daw::parser::is_unicode_whitespace( tag.front( ) ) ) {
+			tag.remove_prefix( );
 		}
-
-		ParseTemplate::ParseTemplate( range::CharRange template_string )
-		  : m_callbacks( ), m_template( template_string ), m_callback_map( std::make_unique<impl::CallbackMap>( ) ) {
-
-			generate_callbacks( );
+		daw::exception::daw_throw_on_true( tag.empty( ), "Empty tag found" );
+		if( tag.starts_with( "call" ) ) {
+			tag.remove_prefix( "call"_sv.size( ) );
+			return process_call_tag( tag );
 		}
-
-		namespace {
-			template<bool, typename T1, typename T2>
-			struct is_cond {
-				typedef T1 type;
-			};
-
-			template<typename T1, typename T2>
-			struct is_cond<false, T1, T2> {
-				typedef T2 type;
-			};
-
-			template<typename T1, typename T2>
-			struct largest {
-				typedef typename is_cond<( sizeof( T1 ) > sizeof( T2 ) ), T1, T2>::type type;
-			};
-
-			template<typename T1, typename T2>
-			using largest_t = typename largest<T1, T2>::type;
-
-			template<typename Iterator1, typename Iterator2>
-			bool is_equal_shortest( Iterator1 first1, Iterator1 last1, Iterator2 first2, Iterator2 last2 ) {
-				// compare the two ranges to the length of the shortest
-				while( first1 != last1 && first2 != last2 ) {
-					using v_type = largest_t<decltype( *first1 ), decltype( *first2 )>;
-					v_type const value1 = static_cast<v_type>( *first1 );
-					v_type const value2 = static_cast<v_type>( *first2 );
-
-					if( value1 != value2 ) {
-						return false;
-					}
-					++first1;
-					++first2;
-				}
-				return true;
+		if( tag.starts_with( "date" ) ) {
+			tag.remove_prefix( "date"_sv.size( ) );
+			return process_date_tag( tag );
+		}
+		if( tag.starts_with( "time" ) ) {
+			if( tag.starts_with( "timestamp" ) ) {
+				tag.remove_prefix( "timestamp"_sv.size( ) );
+				return process_timestamp_tag( tag );
 			}
+			tag.remove_prefix( ( "time"_sv.size( ) ) );
+			return process_time_tag( tag );
+		}
+		daw::exception::daw_throw( "Unknown tag type" );
+	}
 
-			template<typename Iterator>
-			Iterator find_string( Iterator first, Iterator last, daw::string_view value ) {
-				auto result_it = std::find( first, last, *value.begin( ) );
-				while( result_it != last ) {
-
-					if( is_equal_shortest( result_it, last, value.begin( ), value.end( ) ) ) {
-						return result_it;
-					}
-					++result_it;
-				}
-				return result_it;
-			}
-		} // namespace
-
-		void ParseTemplate::generate_callbacks( ) {
-			assert( m_callback_map );
-			m_callback_map->clear( );
-
-			auto parse_tag_type = [&]( auto first, auto const &last ) {
-				auto result = impl::CallbackMap::CallbackTypes::Unknown;
-				switch( *first ) {
-				case '=':
-					result = impl::CallbackMap::CallbackTypes::Normal;
-					break;
-				case 'r':
-					++first;
-					if( find_string( first, last, "epeat" ) == last ) {
-						break;
-					}
-					result = impl::CallbackMap::CallbackTypes::Repeat;
-					break;
-				case 'd':
-					++first;
-					if( find_string( first, last, "ate" ) != last ) {
-						first += 3;
-						if( find_string( first, last, "_format" ) != last ) {
-							result = impl::CallbackMap::CallbackTypes::DateFormat;
-							break;
+	namespace {
+		constexpr size_t find_quote( daw::string_view str ) noexcept {
+			bool in_slash = false;
+			for( size_t n = 0; n < str.size( ); ++n ) {
+				if( str[n] == '\\' ) {
+					in_slash = true;
+					continue;
+				} else {
+					if( str[n] == '"' ) {
+						if( !in_slash ) {
+							return n;
 						}
-						result = impl::CallbackMap::CallbackTypes::Date;
 					}
-					break;
-				case 't':
-					++first;
-					if( find_string( first, last, "ime" ) != last ) {
-						first += 3;
-						if( find_string( first, last, "_format" ) != last ) {
-							result = impl::CallbackMap::CallbackTypes::TimeFormat;
-							break;
-						}
-						result = impl::CallbackMap::CallbackTypes::Time;
-					}
-					break;
+					in_slash = false;
 				}
-				return result;
-			};
+			}
+			return str.npos;
+		}
 
-			auto find_quoted_string = []( auto first, auto const &last ) {
+		constexpr daw::string_view find_args( daw::string_view tag ) {
+			using namespace daw::string_view_literals;
+			tag.remove_prefix( tag.find( R"(args=")" ) );
+			tag.remove_prefix( R"(args=")"_sv.size( ) );
+			if( tag.empty( ) ) {
+				return tag;
+			}
+			auto end_quote_pos = find_quote( tag );
+			daw::exception::daw_throw_on_true( end_quote_pos == tag.npos, "Could not find end of call args" );
+			tag.resize( end_quote_pos );
+			return tag;
+		}
+	} // namespace
+	void parse_template::process_call_tag( daw::string_view tag ) {
+		using namespace daw::string_view_literals;
+		tag = find_args( tag );
+		daw::exception::daw_throw_on_true( tag.empty( ), "Could not find start of call args" );
+		auto callable_name = tag.substr( 0, tag.find( "," ) );
+		daw::exception::daw_throw_on_true( callable_name.empty( ), "Invalid call name, cannot be empty" );
+		tag.remove_prefix( callable_name.size( ) + 1 );
 
-				auto result = std::make_pair( last, last );
+		m_callbacks[callable_name.to_string( )] = nullptr;
 
-				auto in_quote = false;
-				auto prev_slash = false;
-				for( ; first != last; ++first ) {
-					if( !prev_slash && '"' == *first ) {
-						if( in_quote ) {
-							result.second = first;
-							break;
-						} else {
-							in_quote = true;
-							result.first = first + 1;
-						}
-					} else if( '\\' == *first ) {
-						prev_slash = true;
-					} else {
-						prev_slash = false;
-					}
+		m_doc_builder.emplace_back( [callable_name, tag, this]( ) {
+			auto cb = m_callbacks[callable_name.to_string( )];
+			daw::exception::daw_throw_on_false( cb, "Attempt to call an undefined function" );
+			return cb( tag );
+		} );
+	}
+
+	void parse_template::process_date_tag( daw::string_view ) {
+		m_doc_builder.emplace_back( []( ) {
+			using namespace date;
+			using namespace std::chrono;
+			std::stringstream ss{};
+			auto const current_time = date::make_zoned( date::current_zone( ), std::chrono::system_clock::now( ) );
+			ss << date::format( "%Y-%m-%d", current_time );
+			return ss.str( );
+		} );
+	}
+
+	void parse_template::process_time_tag( daw::string_view ) {
+		m_doc_builder.emplace_back( []( ) {
+			using namespace date;
+			using namespace std::chrono;
+			std::stringstream ss{};
+			auto const current_time =
+			  date::make_zoned( date::current_zone( ), floor<seconds>( std::chrono::system_clock::now( ) ) );
+			ss << date::format( "%T", current_time );
+			return ss.str( );
+		} );
+	}
+
+	void parse_template::process_timestamp_tag( daw::string_view str ) {
+		str = find_args( str );
+		m_doc_builder.emplace_back( [str]( ) {
+			daw::string_view tag = str;
+			char const default_ts_fmt[] = "%Y-%m-%dT%T";
+			char const default_tz_fmt[] = "Z";
+			daw::string_view ts_fmt = default_ts_fmt;
+			daw::string_view tz_fmt = default_tz_fmt;
+			if( !tag.empty( ) ) {
+				auto comma_pos = tag.find( "," );
+				ts_fmt = tag.substr( 0, comma_pos );
+				tag.remove_prefix( comma_pos );
+				tag.remove_prefix( 1 );
+				if( !tag.empty( ) ) {
+					tz_fmt = tag;
+				} else {
+					tz_fmt = daw::string_view{};
 				}
-				return result;
-			};
+			}
+			using namespace date;
+			using namespace std::chrono;
+			std::stringstream ss{};
+			std::string const fmt_str = ts_fmt.to_string( ) + tz_fmt.to_string( );
+			auto const current_time =
+			  date::make_zoned( date::current_zone( ), floor<seconds>( std::chrono::system_clock::now( ) ) );
+			ss << date::format( fmt_str.c_str( ), current_time );
+			return ss.str( );
+		} );
+	}
 
-			auto find_tags = [&]( auto first, auto const last, daw::string_view open_tag, daw::string_view close_tag ) {
-				while( first != last ) {
-					first = find_string( first, last, open_tag );
-					if( first == last ) {
-						break;
-					}
-					auto open_it = first;
-					first += open_tag.size( );
-					auto open_it_inside = first;
-					first = find_string( first, last, close_tag );
-					if( first == last ) {
-						break;
-					}
-					first += close_tag.size( );
-					auto tag_type = parse_tag_type( open_it_inside, first );
+	std::string parse_template::to_string( ) {
+		std::stringstream ss{};
+		to_string( ss );
+		return ss.str( );
+	}
 
-					auto tag_argument = find_quoted_string( open_it_inside, first );
-					auto current_quote_pos = tag_argument.first;
-					std::vector<range::CharRange> tag_arguments;
-					while( current_quote_pos != first ) {
-						tag_arguments.push_back( range::create_char_range( tag_argument.first, tag_argument.second ) );
-						current_quote_pos = tag_argument.second;
-						if( current_quote_pos != first ) {
-							++current_quote_pos;
-						}
-						tag_argument = find_quoted_string( current_quote_pos, first );
-						current_quote_pos = tag_argument.second;
-					}
-					m_callback_map->add( open_it, first, tag_type, std::move( tag_arguments ) );
-				}
-			};
+	std::string &impl::to_string( std::string &str ) noexcept {
+		return str;
+	}
 
-			find_tags( m_template.begin( ), m_template.end( ), "<%", "%>" );
-			m_callback_map->sort( );
+	std::string impl::to_string( std::string &&str ) noexcept {
+		return std::move( str );
+	}
+
+	std::string impl::doc_parts::operator( )( ) const {
+		return m_to_string( );
+	}
+
+	namespace {
+		constexpr char unescape( char c ) noexcept {
+			switch( c ) {
+			case 'a':
+				return '\a';
+			case 'b':
+				return '\b';
+			case 'f':
+				return '\f';
+			case 'n':
+				return '\n';
+			case 'r':
+				return '\r';
+			case 't':
+				return '\t';
+			case 'v':
+				return '\v';
+			default:
+				return c;
+			}
 		}
 
-		std::string ParseTemplate::process_template_to_string( ) {
-			std::stringstream result;
-			process_template( result );
-			return result.str( );
+		std::string trim_quotes( daw::string_view str ) {
+			if( str.size( ) >= 2 && str.front( ) == '"' && str.back( ) == '"' ) {
+				str.remove_prefix( );
+				str.remove_suffix( );
+			}
+			return str.to_string( );
 		}
+	} // namespace
 
-		std::vector<std::string> ParseTemplate::list_callbacks( ) const {
-			std::vector<std::string> result{};
-			result.reserve( m_callbacks.size( ) );
-
-			std::transform( m_callbacks.cbegin( ), m_callbacks.cend( ), std::back_inserter( result ),
-			                []( auto item ) { return item.first; } );
-
-			return result;
+	std::string parse_to_value( daw::string_view str, escaped_string ) {
+		std::string result{};
+		bool in_escape = false;
+		while( !str.empty( ) ) {
+			if( in_escape ) {
+				in_escape = false;
+				result += unescape( str.front( ) );
+			} else if( str.front( ) == '\\' ) {
+				in_escape = true;
+			} else {
+				result += str.front( );
+			}
+			str.remove_prefix( );
 		}
-
-		void ParseTemplate::callback_remove( range::CharRange callback_name ) {
-			m_callbacks.erase( to_string( callback_name ) );
-		}
-
-		bool ParseTemplate::callback_exists( range::CharRange callback_name ) const {
-			return m_callbacks.count( to_string( callback_name ) ) != 0;
-		}
-
-		void ParseTemplate::add_callback_impl( range::CharRange callback_name, std::function<std::string( )> callback ) {
-			m_callbacks[to_string( callback_name )].cb_normal = callback;
-		}
-
-		void ParseTemplate::add_callback_impl( range::CharRange callback_name,
-		                                       std::function<std::vector<std::string>( )> callback ) {
-			m_callbacks[to_string( callback_name )].cb_repeat = callback;
-		}
-	} // namespace parse_template
+		return trim_quotes( result );
+	}
 } // namespace daw
-

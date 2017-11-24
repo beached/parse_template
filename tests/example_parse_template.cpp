@@ -26,11 +26,14 @@
 
 #include <daw/daw_memory_mapped_file.h>
 #include <daw/daw_string_view.h>
+#include <date/date.h>
+#include <date/tz.h>
 
 #include "daw_parse_template.h"
 
 int main( int argc, char const **argv ) {
-	using namespace daw::parse_template;
+	auto const current_time = date::make_zoned( date::current_zone( ), std::chrono::system_clock::now( ) );
+	std::cout << "Starting at: " << current_time << '\n';
 
 	if( argc <= 1 ) {
 		std::cerr << "Must supply a template file" << std::endl;
@@ -43,29 +46,25 @@ int main( int argc, char const **argv ) {
 		exit( EXIT_FAILURE );
 	}
 
-	daw::string_view str{template_str.data( ), template_str.size( )};
+	daw::parse_template p{template_str};
 
-	auto p = create_parse_template( template_str.begin( ), template_str.end( ) );
+	p.add_callback( "dummy_text_cb", []( ) { return std::string{"This is some dummy text"}; } );
 
-	p.add_callback( daw::range::create_char_range( "dummy_text_cb" ),
-	                []( ) { return std::string{"This is some dummy text"}; } );
-	p.add_callback( daw::range::create_char_range( "repeat_test" ), []( ) {
-		std::vector<std::string> result;
-		std::string s;
-		for( size_t n = 0; n < 10; ++n ) {
-			result.push_back( s + static_cast<char>( '0' + n ) );
-		}
-		return result;
+	p.add_callback<int, int, daw::escaped_string>( "dummy_text_cb2", []( int a, int b, std::string str ) {
+		std::string msg = "From " + std::to_string( a ) + " to " + std::to_string( b ) + "we say " + str;
+		return msg;
 	} );
-	std::cout << "Callbacks:\n";
-	for( auto const &t : p.list_callbacks( ) ) {
-		std::cout << t << "\n";
-	}
-	std::cout << '\n';
 
-	std::cout << "\n---\n";
-	p.process_template( std::cout );
-	std::cout << "\n---\n";
+	p.add_callback<size_t, daw::escaped_string, daw::escaped_string>(
+	  "repeat_test", []( size_t how_many, std::string prefix, std::string suffix ) {
+		  std::string result{};
+		  for( size_t n = 0; n < how_many; ++n ) {
+			  result += prefix + static_cast<char>( '0' + n ) + suffix;
+		  }
+		  return result;
+	  } );
+
+	p.to_string( std::cout );
+
 	return EXIT_SUCCESS;
 }
-

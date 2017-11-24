@@ -22,224 +22,96 @@
 
 #pragma once
 
-#include <cassert>
-#include <future>
-#include <iomanip>
-#include <numeric>
-#include <string>
-#include <ctime>
 #include <unordered_map>
 #include <vector>
 
-#include <daw/char_range/daw_char_range.h>
+#include <daw/daw_container_algorithm.h>
+#include <daw/daw_output_stream_iterator.h>
+#include <daw/daw_parse_to.h>
 #include <daw/daw_string_view.h>
+#include <daw/daw_traits.h>
 
 namespace daw {
-	void daw_localtime_s( std::time_t const *source, struct tm *result );
-	namespace parse_template {
-		class ParseTemplate;
+	struct escaped_string {};
+	std::string parse_to_value( daw::string_view str, escaped_string );
 
-		namespace impl {
-			struct CallbackMap {
-				using iterator = typename range::CharRange::iterator;
-				enum class CallbackTypes { Normal, Date, Time, DateFormat, TimeFormat, Repeat, Unknown };
-				std::vector<iterator> beginnings;
-				std::vector<iterator> endings;
-				std::vector<CallbackTypes> types;
-				std::vector<std::vector<range::CharRange>> arguments;
+	namespace impl {
 
-				size_t size( ) const;
-				void clear( );
-				void add( iterator beginning, iterator ending, CallbackTypes callback_type );
-				void add( iterator beginning, iterator ending, CallbackTypes callback_type,
-				          std::vector<range::CharRange> argument );
-				void sort( );
+		std::string &to_string( std::string &str ) noexcept;
 
-				struct helpers {
-					template<typename Container, typename Compare>
-					static std::vector<std::size_t> sort_permutation( Container const &vec, Compare compare ) {
-						std::vector<std::size_t> p( vec.size( ) );
-						std::iota( p.begin( ), p.end( ), 0 );
-						std::sort( p.begin( ), p.end( ),
-						           [&]( std::size_t i, std::size_t j ) { return compare( vec[i], vec[j] ); } );
-						return p;
-					}
+		std::string to_string( std::string &&str ) noexcept;
+		template<typename ToStringFunc>
+		std::function<std::string( )> make_to_string_func( ToStringFunc func ) {
+			return [func = std::move( func )]( ) {
+				using daw::impl::to_string;
+				using std::to_string;
+				return to_string( func( ) );
+			};
+		}
 
-					template<typename Container>
-					static void apply_permutation( Container &vec, std::vector<std::size_t> const &p ) {
-						std::vector<typename Container::value_type> sorted_vec( p.size( ) );
-						std::transform( p.begin( ), p.end( ), sorted_vec.begin( ), [&]( std::size_t i ) { return vec[i]; } );
-						vec = std::move( sorted_vec );
-					}
-
-					static void wait_for_all( std::initializer_list<std::future<void>> items ) {
-						for( auto const &item : items ) {
-							item.wait( );
-						}
-					}
-
-				}; // struct helpers
-			};   // struct CallbackMap
-
-			struct CB {
-				std::function<std::string( )> cb_normal;
-				std::function<std::vector<std::string>( )> cb_repeat;
-			}; // struct CB
-
-			template<typename T>
-			constexpr T const &make_const( T &value ) noexcept {
-				return value;
-			}
-
-			template<typename T>
-			T const &make_const( T && ) = delete;
-
-		} // namespace impl
-
-		class ParseTemplate {
-			std::unordered_map<std::string, impl::CB> m_callbacks;
-			range::CharRange m_template;
-			std::unique_ptr<impl::CallbackMap> m_callback_map;
+		class doc_parts {
+			std::function<std::string( )> m_to_string;
 
 		public:
-			ParseTemplate( ) = default;
-			~ParseTemplate( ) = default;
-			ParseTemplate( ParseTemplate const &other );
-			ParseTemplate( ParseTemplate && ) noexcept = default;
-			ParseTemplate &operator=( ParseTemplate const &rhs );
-			ParseTemplate &operator=( ParseTemplate && ) noexcept = default;
-			ParseTemplate( range::CharRange template_string );
+			doc_parts( ) = delete;
+			~doc_parts( ) = default;
+			doc_parts( doc_parts const & ) = default;
+			doc_parts( doc_parts && ) noexcept = default;
+			doc_parts &operator=( doc_parts const & ) = default;
+			doc_parts &operator=( doc_parts && ) noexcept = default;
 
-			void generate_callbacks( );
-			std::string process_template_to_string( );
+			template<typename ToStringFunc>
+			doc_parts( ToStringFunc to_string_func ) : m_to_string{make_to_string_func( std::move( to_string_func ) )} {}
 
-			template<typename Stream>
-			void process_template( Stream &out_stream ) {
-				auto show_string = []( auto &stream, range::CharIterator first, range::CharIterator const last ) {
-					while( first != last ) {
-						stream << *first++;
-					}
-					return first;
-				};
+			std::string operator( )( ) const;
+		};
+	} // namespace impl
 
-				std::string dte_format = "%x";
-				std::string tm_format = "%X";
+	class parse_template {
+		std::vector<impl::doc_parts> m_doc_builder;
+		std::unordered_map<std::string, std::function<std::string( daw::string_view )>> m_callbacks;
 
-				auto pos = m_template.begin( ).base( );
+		void process_template( daw::string_view template_str );
+		void parse_tag( daw::string_view tag );
+		void process_call_tag( daw::string_view tag );
+		void process_date_tag( daw::string_view tag );
+		void process_time_tag( daw::string_view tag );
+		void process_text( string_view str );
 
-				for( size_t n = 0; n < m_callback_map->size( ); ++n ) {
-					pos = show_string( out_stream, pos, m_callback_map->beginnings[n].base( ) );
-					switch( m_callback_map->types[n] ) {
-					case impl::CallbackMap::CallbackTypes::Normal: {
-						if( m_callback_map->arguments[n].size( ) != 1 ) {
-							out_stream << "Error, invalid arguments, expected 1, at position "
-							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
-							break;
-						}
-						auto const &cb_name = m_callback_map->arguments[n][0];
-						if( !cb_name.empty( ) && callback_exists( cb_name ) && m_callbacks[to_string( cb_name )].cb_normal ) {
-							out_stream << m_callbacks[to_string( cb_name )].cb_normal( );
-						}
-						break;
-					}
-					case impl::CallbackMap::CallbackTypes::Date: {
-						std::time_t t = std::time( nullptr );
-						std::tm result;
-						::daw::daw_localtime_s( &t, &result );
-						out_stream << std::put_time( &result, dte_format.c_str( ) );
-						break;
-					}
-					case impl::CallbackMap::CallbackTypes::Time: {
-						std::time_t t{0};
-						std::tm tm{0};
-						daw::daw_localtime_s( &t, &tm );
-						out_stream << std::put_time( &tm, tm_format.c_str( ) );
-						break;
-					}
-					case impl::CallbackMap::CallbackTypes::DateFormat: {
-						if( m_callback_map->arguments[n].size( ) != 1 ) {
-							out_stream << "Error, invalid arguments, expected 1, at position "
-							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
-							break;
-						}
-						dte_format = to_string( m_callback_map->arguments[n][0] );
-						break;
-					}
-					case impl::CallbackMap::CallbackTypes::TimeFormat: {
-						if( m_callback_map->arguments[n].size( ) != 1 ) {
-							out_stream << "Error, invalid arguments, expected 1, at position "
-							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
-							break;
-						}
-						tm_format = to_string( m_callback_map->arguments[n][0] );
-						break;
-					}
-					case impl::CallbackMap::CallbackTypes::Repeat: {
-						if( m_callback_map->arguments[n].empty( ) ) {
-							out_stream << "Error, invalid arguments, expected 1, at position "
-							           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
-							break;
-						}
-						auto const &cb_name = m_callback_map->arguments[n][0];
+	public:
+		parse_template( ) = default;
+		~parse_template( ) = default;
+		parse_template( parse_template const & ) = default;
+		parse_template( parse_template && ) noexcept = default;
+		parse_template &operator=( parse_template const & ) = default;
+		parse_template &operator=( parse_template && ) noexcept = default;
 
-						if( !cb_name.empty( ) && callback_exists( cb_name ) && m_callbacks[to_string( cb_name )].cb_repeat ) {
-							std::string prefix = "";
-							std::string postfix = "";
-							if( m_callback_map->arguments[n].size( ) == 3 ) {
-								prefix = to_string( m_callback_map->arguments[n][1] );
-								postfix = to_string( m_callback_map->arguments[n][2] );
-							}
-							auto tmp = m_callbacks[to_string( cb_name )].cb_repeat( );
-							auto count = tmp.size( );
-							for( auto const &line : tmp ) {
-								out_stream << prefix << line << postfix;
-								if( count-- > 1 ) {
-									out_stream << '\n';
-								}
-							}
-						}
-						break;
-					}
-					case impl::CallbackMap::CallbackTypes::Unknown:
-						out_stream << "Error, unknown tag at position "
-						           << std::distance( m_template.begin( ), m_callback_map->beginnings[n] ) << '\n';
-						break;
-					}
+		template<typename StringRange, std::enable_if_t<(daw::traits::is_container_like_v<StringRange> &&
+		                                                 daw::traits::is_value_size_equal_v<StringRange, 1>),
+		                                                std::nullptr_t> = nullptr>
+		parse_template( StringRange const &template_string ) : m_doc_builder{}, m_callbacks{} {
 
-					pos = m_callback_map->endings[n].base( );
-				}
-				show_string( out_stream, pos, m_template.end( ).base( ) );
-			}
-
-			std::vector<std::string> list_callbacks( ) const;
-			void callback_remove( range::CharRange callback_name );
-			bool callback_exists( range::CharRange callback_name ) const;
-			void add_callback_impl( range::CharRange callback_name, std::function<std::string( )> callback );
-			void add_callback_impl( range::CharRange callback_name, std::function<std::vector<std::string>( )> callback );
-
-			template<typename CallbackFunction>
-			void add_callback( range::CharRange callback_name, CallbackFunction callback ) {
-				using result_t = typename std::result_of<CallbackFunction( )>::type;
-				std::function<result_t( )> cb = callback;
-				add_callback_impl( callback_name, cb );
-			}
-
-			template<typename CallbackFunction>
-			void add_callback( daw::string_view callback_name, CallbackFunction &&callback ) {
-				add_callback( daw::range::create_char_range( callback_name.begin( ), callback_name.end( ) ),
-				              std::forward<CallbackFunction>( callback ) );
-			}
-		}; // class ParseTemplate
-
-		template<typename Iterator>
-		ParseTemplate create_parse_template( Iterator Begin, Iterator End ) {
-			return ParseTemplate( daw::range::create_char_range( Begin, End ) );
+			process_template( daw::make_string_view_it( std::cbegin( template_string ), std::cend( template_string ) ) );
 		}
 
-		template<typename String>
-		ParseTemplate create_parse_template( String const &str ) {
-			return ParseTemplate( daw::range::create_char_range( str ) );
+		template<typename Stream>
+		void to_string( Stream &strm ) {
+			daw::container::transform( m_doc_builder, daw::make_output_stream_iterator( strm ),
+			                           []( auto const &d ) { return d( ); } );
 		}
-	} // namespace parse_template
+
+		std::string to_string( );
+
+		template<typename... ArgTypes, typename Callback>
+		void add_callback( daw::string_view name, Callback callback ) {
+			m_callbacks[name.to_string( )] = [callback = std::move( callback )]( daw::string_view str ) {
+				using daw::impl::to_string;
+				using std::to_string;
+				auto result = daw::apply_string2<ArgTypes...>( callback, str, "," );
+				return to_string( std::move( result ) );
+			};
+		}
+
+		void process_timestamp_tag( string_view tag );
+	}; // class parse_template
 } // namespace daw
-

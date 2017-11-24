@@ -9,6 +9,7 @@ find_package( Boost 1.59.0 REQUIRED COMPONENTS system filesystem regex unit_test
 add_definitions( -DBOOST_ALL_NO_LIB -DBOOST_ALL_DYN_LINK )
 
 find_package( Threads REQUIRED )
+find_package( CURL REQUIRED )
 
 if( ${CMAKE_CXX_COMPILER_ID} STREQUAL 'MSVC' )
 	add_compile_options( -D_WIN32_WINNT=0x0601 /std:c++latest )
@@ -55,6 +56,7 @@ include_directories( SYSTEM "${CMAKE_BINARY_DIR}/install/include" )
 link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
 
 include_directories( SYSTEM ${Boost_INCLUDE_DIRS} )
+include_directories( SYSTEM ${CURL_INCLUDE_DIRS} )
 link_directories( ${Boost_LIBRARY_DIRS} )
 
 set( HEADER_FOLDER "include" )
@@ -73,7 +75,7 @@ set( SOURCE_FILES
 
 add_library ( parse_template STATIC ${HEADER_FILES} ${SOURCE_FILES} )
 add_dependencies( parse_template header_libraries_prj char_range_prj )
-target_link_libraries( parse_template char_range )
+target_link_libraries( parse_template char_range tz ${CURL_LIBRARIES} )
 
 add_executable( example_parse_template ${HEADER_FILES} ${TEST_FOLDER}/example_parse_template.cpp )
 target_link_libraries( example_parse_template parse_template ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${COMPILER_SPECIFIC_LIBS} )
