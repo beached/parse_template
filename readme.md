@@ -5,7 +5,7 @@ A library that accepts a UTF-8 text template and generates text(e.g. html)
 --------------
 |Tag|Description|
 |---|-----------|
-|<%=call args="..."%>|insert text from callback|
+|<%call args="callback_name,args..."%>|insert text from callback|
 |<%date%>|insert current date|
 |<%time%>|insert current time|
 |<%timestamp args="fmt,tz"%>|See [date_formatting.md]|
