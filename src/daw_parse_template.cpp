@@ -163,24 +163,41 @@ namespace daw {
 		} );
 	}
 
-	void parse_template::process_date_tag( daw::string_view ) {
-		m_doc_builder.emplace_back( []( ) {
+	void parse_template::process_date_tag( daw::string_view str ) {
+		auto args = find_split_args( str );
+		daw::exception::daw_throw_on_false( args.size( ) <= 1, "Unexpected argument count" );
+		auto const tz = [&]( ) {
+			if( args.empty( ) || args[0].empty( ) ) {
+				return date::current_zone( );
+			}
+			return date::locate_zone( args[0].to_string( ) );
+		}( );
+
+		m_doc_builder.emplace_back( [tz]( ) {
 			using namespace date;
 			using namespace std::chrono;
 			std::stringstream ss{};
-			auto const current_time = date::make_zoned( date::current_zone( ), std::chrono::system_clock::now( ) );
+			auto const current_time = date::make_zoned( tz, std::chrono::system_clock::now( ) );
 			ss << date::format( "%Y-%m-%d", current_time );
 			return ss.str( );
 		} );
 	}
 
-	void parse_template::process_time_tag( daw::string_view ) {
-		m_doc_builder.emplace_back( []( ) {
+	void parse_template::process_time_tag( daw::string_view str ) {
+		auto args = find_split_args( str );
+		daw::exception::daw_throw_on_false( args.size( ) <= 1, "Unexpected argument count" );
+		auto const tz = [&]( ) {
+			if( args.empty( ) || args[0].empty( ) ) {
+				return date::current_zone( );
+			}
+			return date::locate_zone( args[0].to_string( ) );
+		}( );
+		m_doc_builder.emplace_back( [tz]( ) {
 			using namespace date;
 			using namespace std::chrono;
 			std::stringstream ss{};
 			auto const current_time =
-			  date::make_zoned( date::current_zone( ), floor<seconds>( std::chrono::system_clock::now( ) ) );
+			  date::make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
 			ss << date::format( "%T", current_time );
 			return ss.str( );
 		} );

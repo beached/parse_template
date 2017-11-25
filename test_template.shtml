@@ -4,19 +4,29 @@
 </head>
 <body>
 <p>
-    Today's date is <%date%>.<br>
+	Today's local date is <%date%><br>
+	The current Berlin date is <%date args="Europe/Berlin"%><br>
+	The current New York date is <%date args="America/New_York"%><br>
+	The current South Pole date is <%date args="Antarctica/South_Pole"%><br>
+	The current date for Etc/GMT-12 is <%date args="Etc/GMT-12"%><br>
 </p>
 <p>
-    The current time is <%time%>.<br>
+	The current local time is <%time%>.<br>
+	The current Berlin time is <%time args="Europe/Berlin"%><br>
+	The current New York time is <%time args="America/New_York"%><br>
+	The current South Pole time is <%time args="Antarctica/South_Pole"%><br>
+	The current time for Etc/GMT-12 is <%time args="Etc/GMT-12"%><br>
 </p>
 <p>
-The current timestamp is <%timestamp%><br>
-The current timestamp is <%timestamp args="%T"%><br>
-The current timestamp is <%timestamp args="%T,America/New_York"%><br>
-The current timestamp is <%timestamp args="%T,Europe/Berlin"%><br>
-The current timestamp is <%timestamp args=",Europe/Berlin"%><br>
-The current timestamp is <%timestamp args=","%><br>
-The current timestamp is <%timestamp args="%Z,"%><br>
+The current local timestamp is <%timestamp%><br>
+The current local timestamp is <%timestamp args="%T"%><br>
+The current timestamp in New York is <%timestamp args="%T,America/New_York"%><br>
+The current timestamp in Berlin is <%timestamp args="%T,Europe/Berlin"%><br>
+The current timestamp in Berlin is <%timestamp args=",Europe/Berlin"%><br>
+The current timestamp in the South Pole is <%timestamp args=",Antarctica/South_Pole"%><br>
+The current timestamp for Etc/GMT-12 is <%timestamp args=",Etc/GMT-12"%><br>
+The current local timestamp is <%timestamp args=","%><br>
+The current local timestamp is <%timestamp args="%Z,"%><br>
 </p>
 <p>
 Some dummy test<pre><%call args="dummy_text_cb"%></pre>
