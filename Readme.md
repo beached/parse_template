@@ -19,7 +19,7 @@ Do not put spaces between comma separates currently
 The constructor for parse_template takes any container that is string like(e.g. std::string, string_view..).  This allows for things like memory mapped files.
 
 ``` C++
-string_view str = ...;
+std::string str = ...;
 auto template = parse_template{ str };
 ```
 
