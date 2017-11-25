@@ -83,5 +83,5 @@ add_dependencies( example_parse_template header_libraries_prj char_range_prj dat
 add_test( example_parse_template_test example_parse_template )
 
 install( TARGETS parse_template DESTINATION lib )
-install( DIRECTORY ${HEADER_FOLDER}/ DESTINATION include/daw/parse_template )
+install( DIRECTORY ${HEADER_FOLDER}/ DESTINATION include/daw )
 
