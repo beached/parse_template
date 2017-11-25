@@ -34,7 +34,7 @@ template.add_callback<int,int,bool>( "callback_name", []( int a, int b, bool c )
 } );
 ```
 
-The previous example adds a callback that takes the arguments of int, int, and bool and returns an int.  The result must be a string or have a to_string overload. To use the example in a template you would call it like the following:
+The previous example adds a callback that takes the arguments of int, int, and bool and returns an int.  The result must be a string or have a ``` to_string ``` overload. To use the example in a template you would call it like the following:
 
 ``` html
 <%call args="callback_name,5,5,true"%><br>
