@@ -10,9 +10,13 @@
     The current time is <%time%>.<br>
 </p>
 <p>
-The current timestamp is <%timestamp%>.<br>
-The current timestamp is <%timestamp args="%T"%>.<br>
-The current timestamp is <%timestamp args="%T,CST"%>.<br>
+The current timestamp is <%timestamp%><br>
+The current timestamp is <%timestamp args="%T"%><br>
+The current timestamp is <%timestamp args="%T,America/New_York"%><br>
+The current timestamp is <%timestamp args="%T,Europe/Berlin"%><br>
+The current timestamp is <%timestamp args=",Europe/Berlin"%><br>
+The current timestamp is <%timestamp args=","%><br>
+The current timestamp is <%timestamp args="%Z,"%><br>
 </p>
 <p>
 Some dummy test<pre><%call args="dummy_text_cb"%></pre>

@@ -51,7 +51,7 @@ int main( int argc, char const **argv ) {
 	p.add_callback( "dummy_text_cb", []( ) { return std::string{"This is some dummy text"}; } );
 
 	p.add_callback<int, int, daw::escaped_string>( "dummy_text_cb2", []( int a, int b, std::string str ) {
-		std::string msg = "From " + std::to_string( a ) + " to " + std::to_string( b ) + "we say " + str;
+		std::string msg = "From " + std::to_string( a ) + " to " + std::to_string( b ) + " we say " + str;
 		return msg;
 	} );
 
@@ -64,6 +64,7 @@ int main( int argc, char const **argv ) {
 		  return result;
 	  } );
 
+	p.to_string( std::cout );
 	p.to_string( std::cout );
 
 	return EXIT_SUCCESS;

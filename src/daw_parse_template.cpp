@@ -116,6 +116,35 @@ namespace daw {
 			tag.resize( end_quote_pos );
 			return tag;
 		}
+
+		std::vector<daw::string_view> find_split_args( daw::string_view tag ) {
+			tag = find_args( tag );
+			std::vector<daw::string_view> results{};
+			bool in_quote = false;
+			bool is_escaped = false;
+			size_t last_pos = 0;
+			for( size_t n = 0; n < tag.size( ); ++n ) {
+				switch( tag[n] ) {
+				case '"':
+					daw::exception::daw_throw_on_true( !is_escaped, "Unexpected unescaped double-quote" );
+					in_quote = !in_quote;
+					continue;
+				case '\\':
+					is_escaped = !is_escaped;
+					continue;
+				case ',':
+					if( !in_quote ) {
+						results.emplace_back( &tag[last_pos], n - last_pos );
+						last_pos = n + 1;
+					}
+					continue;
+				}
+			}
+			if( last_pos < tag.size( ) ) {
+				results.emplace_back( &tag[last_pos], tag.size( ) - last_pos );
+			}
+			return results;
+		}
 	} // namespace
 	void parse_template::process_call_tag( daw::string_view tag ) {
 		using namespace daw::string_view_literals;
@@ -158,31 +187,35 @@ namespace daw {
 	}
 
 	void parse_template::process_timestamp_tag( daw::string_view str ) {
-		str = find_args( str );
-		m_doc_builder.emplace_back( [str]( ) {
-			daw::string_view tag = str;
-			char const default_ts_fmt[] = "%Y-%m-%dT%T";
-			char const default_tz_fmt[] = "Z";
-			daw::string_view ts_fmt = default_ts_fmt;
-			daw::string_view tz_fmt = default_tz_fmt;
-			if( !tag.empty( ) ) {
-				auto comma_pos = tag.find( "," );
-				ts_fmt = tag.substr( 0, comma_pos );
-				tag.remove_prefix( comma_pos );
-				tag.remove_prefix( 1 );
-				if( !tag.empty( ) ) {
-					tz_fmt = tag;
-				} else {
-					tz_fmt = daw::string_view{};
-				}
+		static char const default_ts_fmt[] = "%Y-%m-%dT%T%z";
+		auto args = find_split_args( str );
+		daw::exception::daw_throw_on_false( args.size( ) <= 2, "Unexpected argument count" );
+
+		std::string const ts_fmt =
+		  [&]( ) {
+			  if( args.empty( ) || args[0].empty( ) ) {
+				  return daw::string_view{default_ts_fmt};
+			  }
+			  return args[0];
+		  }( )
+		    .to_string( );
+
+		auto const tz = [&]( ) {
+			if( args.size( ) < 2 || args[1].empty( ) ) {
+				return date::current_zone( );
 			}
+			return date::locate_zone( args[1].to_string( ) );
+		}( );
+
+		m_doc_builder.emplace_back( [ts_fmt, tz]( ) {
 			using namespace date;
 			using namespace std::chrono;
+
 			std::stringstream ss{};
-			std::string const fmt_str = ts_fmt.to_string( ) + tz_fmt.to_string( );
-			auto const current_time =
-			  date::make_zoned( date::current_zone( ), floor<seconds>( std::chrono::system_clock::now( ) ) );
-			ss << date::format( fmt_str.c_str( ), current_time );
+
+			auto current_time = make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
+			ss << format( ts_fmt, current_time );
+
 			return ss.str( );
 		} );
 	}
