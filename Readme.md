@@ -23,7 +23,7 @@ string_view str = ...;
 auto template = parse_template{ str };
 ```
 
-Adding callbacks requires one to specify how the arguments are to be parsed.  Often this is just specifying the types of the arguments, but tag types can be used as any type specified must have a ``` daw::string_view parse_to_value( daw::string_view, type_tag ) ``` method
+Adding callbacks requires one to specify how the arguments are to be parsed.  Often this is just specifying the types of the arguments, but tag types can be used as any type specified must have a ``` std::string parse_to_value( daw::string_view, type_tag ) ``` method
 
 ``` C++
 template.add_callback<int,int,bool>( "callback_name", []( int a, int b, bool c ) {
