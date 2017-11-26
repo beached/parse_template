@@ -24,10 +24,10 @@
 #include <ctime>
 #include <iostream>
 
-#include <daw/daw_memory_mapped_file.h>
-#include <daw/daw_string_view.h>
 #include <date/date.h>
 #include <date/tz.h>
+#include <daw/daw_memory_mapped_file.h>
+#include <daw/daw_string_view.h>
 
 #include "daw_parse_template.h"
 

@@ -196,8 +196,7 @@ namespace daw {
 			using namespace date;
 			using namespace std::chrono;
 			std::stringstream ss{};
-			auto const current_time =
-			  date::make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
+			auto const current_time = date::make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
 			ss << date::format( "%T", current_time );
 			return ss.str( );
 		} );

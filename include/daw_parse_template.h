@@ -40,6 +40,7 @@ namespace daw {
 		std::string &to_string( std::string &str ) noexcept;
 
 		std::string to_string( std::string &&str ) noexcept;
+
 		template<typename ToStringFunc>
 		std::function<std::string( )> make_to_string_func( ToStringFunc func ) {
 			return [func = std::move( func )]( ) {
@@ -61,7 +62,8 @@ namespace daw {
 			doc_parts &operator=( doc_parts && ) noexcept = default;
 
 			template<typename ToStringFunc>
-			doc_parts( ToStringFunc to_string_func ) : m_to_string{make_to_string_func( std::move( to_string_func ) )} {}
+			doc_parts( ToStringFunc to_string_func )
+			  : m_to_string{make_to_string_func( std::move( to_string_func ) )} {}
 
 			std::string operator( )( ) const;
 		};
@@ -89,7 +91,9 @@ namespace daw {
 		template<typename StringRange, std::enable_if_t<(daw::traits::is_container_like_v<StringRange> &&
 		                                                 daw::traits::is_value_size_equal_v<StringRange, 1>),
 		                                                std::nullptr_t> = nullptr>
-		parse_template( StringRange const &template_string ) : m_doc_builder{}, m_callbacks{} {
+		parse_template( StringRange const &template_string )
+		  : m_doc_builder{}
+		  , m_callbacks{} {
 
 			process_template( daw::make_string_view_it( std::cbegin( template_string ), std::cend( template_string ) ) );
 		}
