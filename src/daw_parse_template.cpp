@@ -41,31 +41,30 @@ namespace daw {
 
 	void parse_template::process_template( daw::string_view template_str ) {
 
-		auto cur_pos = template_str.find( "<%" );
-		process_text( template_str.substr( 0, cur_pos ) );
-		template_str.remove_prefix( cur_pos );
-		template_str.remove_prefix( 2 );
+		process_text( template_str.pop_front( "<%" ) );
 		while( !template_str.empty( ) ) {
-			cur_pos = template_str.find( "%>" );
+			auto item = template_str.pop_front( "%>" );
+			daw::exception::Assert( !template_str.empty( ), "Unexpected empty tag" );
 
-			daw::exception::daw_throw_on_false( 0 < cur_pos && cur_pos != template_str.npos, "Unexpected empty tag" );
-			parse_tag( template_str.substr( 0, cur_pos ) );
-			template_str.remove_prefix( cur_pos );
-			template_str.remove_prefix( 2 );
-
-			cur_pos = template_str.find( "<%" );
-			process_text( template_str.substr( 0, cur_pos ) );
-			template_str.remove_prefix( cur_pos );
-			template_str.remove_prefix( 2 );
+			parse_tag( item );
+			process_text( template_str.pop_front( "<%" ) );
 		}
 	}
 
+	namespace {
+		constexpr void remove_leading_whitespace( daw::string_view & sv ) noexcept {
+			size_t count = 0;
+			while( !sv.empty( ) && daw::parser::is_unicode_whitespace( sv[count] ) ) {
+				++count;
+			}
+			sv.remove_prefix( count );
+		}
+	}
 	void parse_template::parse_tag( daw::string_view tag ) {
 		using namespace daw::string_view_literals;
-		while( !tag.empty( ) && daw::parser::is_unicode_whitespace( tag.front( ) ) ) {
-			tag.remove_prefix( );
-		}
-		daw::exception::daw_throw_on_true( tag.empty( ), "Empty tag found" );
+
+		remove_leading_whitespace( tag );
+
 		if( tag.starts_with( "call" ) ) {
 			tag.remove_prefix( "call"_sv.size( ) );
 			return process_call_tag( tag );
@@ -82,7 +81,7 @@ namespace daw {
 			tag.remove_prefix( ( "time"_sv.size( ) ) );
 			return process_time_tag( tag );
 		}
-		daw::exception::daw_throw( "Unknown tag type" );
+		daw::exception::daw_throw( "Unknown or empty tag type" );
 	}
 
 	namespace {
@@ -106,8 +105,7 @@ namespace daw {
 
 		constexpr daw::string_view find_args( daw::string_view tag ) {
 			using namespace daw::string_view_literals;
-			tag.remove_prefix( tag.find( R"(args=")" ) );
-			tag.remove_prefix( R"(args=")"_sv.size( ) );
+			tag.pop_front( R"(args=")" );
 			if( tag.empty( ) ) {
 				return tag;
 			}
@@ -150,9 +148,8 @@ namespace daw {
 		using namespace daw::string_view_literals;
 		tag = find_args( tag );
 		daw::exception::daw_throw_on_true( tag.empty( ), "Could not find start of call args" );
-		auto callable_name = tag.substr( 0, tag.find( "," ) );
+		auto callable_name = tag.pop_front( "," );
 		daw::exception::daw_throw_on_true( callable_name.empty( ), "Invalid call name, cannot be empty" );
-		tag.remove_prefix( callable_name.size( ) + 1 );
 
 		m_callbacks[callable_name.to_string( )] = nullptr;
 
@@ -289,15 +286,15 @@ namespace daw {
 		std::string result{};
 		bool in_escape = false;
 		while( !str.empty( ) ) {
+			auto const item = str.pop_front( );
 			if( in_escape ) {
 				in_escape = false;
-				result += unescape( str.front( ) );
-			} else if( str.front( ) == '\\' ) {
+				result += unescape( item );
+			} else if( item == '\\' ) {
 				in_escape = true;
 			} else {
-				result += str.front( );
+				result += item;
 			}
-			str.remove_prefix( );
 		}
 		return trim_quotes( result );
 	}
