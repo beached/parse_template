@@ -74,7 +74,7 @@ set( SOURCE_FILES
 )
 
 add_library ( parse_template STATIC ${HEADER_FILES} ${SOURCE_FILES} )
-add_dependencies( parse_template header_libraries_prj char_range_prj )
+add_dependencies( parse_template header_libraries_prj date_prj char_range_prj )
 target_link_libraries( parse_template char_range tz ${CURL_LIBRARIES} )
 
 add_executable( example_parse_template ${HEADER_FILES} ${TEST_FOLDER}/example_parse_template.cpp )
