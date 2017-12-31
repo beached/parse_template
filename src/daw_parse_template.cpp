@@ -167,7 +167,7 @@ namespace daw {
 			if( args.empty( ) || args[0].empty( ) ) {
 				return date::current_zone( );
 			}
-			return date::locate_zone( args[0].to_string( ) );
+			return date::locate_zone( args[0].to_string( ).c_str( ) );
 		}( );
 
 		m_doc_builder.emplace_back( [tz]( ) {
@@ -187,7 +187,7 @@ namespace daw {
 			if( args.empty( ) || args[0].empty( ) ) {
 				return date::current_zone( );
 			}
-			return date::locate_zone( args[0].to_string( ) );
+			return date::locate_zone( args[0].to_string( ).c_str( )  );
 		}( );
 		m_doc_builder.emplace_back( [tz]( ) {
 			using namespace date;
@@ -217,7 +217,7 @@ namespace daw {
 			if( args.size( ) < 2 || args[1].empty( ) ) {
 				return date::current_zone( );
 			}
-			return date::locate_zone( args[1].to_string( ) );
+			return date::locate_zone( args[1].to_string( ).c_str( )  );
 		}( );
 
 		m_doc_builder.emplace_back( [ts_fmt, tz]( ) {

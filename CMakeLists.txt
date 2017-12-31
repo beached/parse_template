@@ -40,7 +40,7 @@ externalproject_add(
 	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/date"
 	GIT_TAG "master"
 	INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
-	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
+	CMAKE_ARGS -DTZ_CXX_STANDARD=14 -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
 )
 
 externalproject_add(
@@ -78,7 +78,7 @@ add_dependencies( parse_template header_libraries_prj date_prj char_range_prj )
 target_link_libraries( parse_template char_range tz ${CURL_LIBRARIES} )
 
 add_executable( example_parse_template ${HEADER_FILES} ${TEST_FOLDER}/example_parse_template.cpp )
-target_link_libraries( example_parse_template parse_template ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${COMPILER_SPECIFIC_LIBS} )
+target_link_libraries( example_parse_template tz parse_template ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${COMPILER_SPECIFIC_LIBS} )
 add_dependencies( example_parse_template header_libraries_prj char_range_prj date_prj )
 add_test( example_parse_template_test example_parse_template )
 
