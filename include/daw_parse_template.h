@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 //
-// Copyright (c) 2014-2017 Darrell Wright
+// Copyright (c) 2014-2018 Darrell Wright
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files( the "Software" ), to deal
@@ -22,14 +22,15 @@
 
 #pragma once
 
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include <daw/daw_container_algorithm.h>
-#include <daw/daw_output_stream_iterator.h>
 #include <daw/daw_parse_to.h>
 #include <daw/daw_string_view.h>
 #include <daw/daw_traits.h>
+#include <daw/iterator/daw_output_stream_iterator.h>
 
 namespace daw {
 	struct escaped_string {};
@@ -43,6 +44,7 @@ namespace daw {
 
 		template<typename ToStringFunc>
 		std::function<std::string( )> make_to_string_func( ToStringFunc func ) {
+			static_assert( daw::is_callable_v<ToStringFunc>, "ToStringFunc must be callable without arguments func( )" );
 			return [func = std::move( func )]( ) {
 				using daw::impl::to_string;
 				using std::to_string;
@@ -54,16 +56,9 @@ namespace daw {
 			std::function<std::string( )> m_to_string;
 
 		public:
-			doc_parts( ) = delete;
-			~doc_parts( ) = default;
-			doc_parts( doc_parts const & ) = default;
-			doc_parts( doc_parts && ) noexcept = default;
-			doc_parts &operator=( doc_parts const & ) = default;
-			doc_parts &operator=( doc_parts && ) noexcept = default;
-
 			template<typename ToStringFunc>
 			doc_parts( ToStringFunc to_string_func )
-			  : m_to_string{make_to_string_func( std::move( to_string_func ) )} {}
+			  : m_to_string( make_to_string_func( std::move( to_string_func ) ) ) {}
 
 			std::string operator( )( ) const;
 		};
@@ -81,19 +76,12 @@ namespace daw {
 		void process_text( string_view str );
 
 	public:
-		parse_template( ) = default;
-		~parse_template( ) = default;
-		parse_template( parse_template const & ) = default;
-		parse_template( parse_template && ) noexcept = default;
-		parse_template &operator=( parse_template const & ) = default;
-		parse_template &operator=( parse_template && ) noexcept = default;
-
 		template<typename StringRange, std::enable_if_t<(daw::traits::is_container_like_v<StringRange> &&
 		                                                 daw::traits::is_value_size_equal_v<StringRange, 1>),
 		                                                std::nullptr_t> = nullptr>
 		parse_template( StringRange const &template_string )
-		  : m_doc_builder{}
-		  , m_callbacks{} {
+		  : m_doc_builder() 
+		  , m_callbacks() {
 
 			process_template( daw::make_string_view_it( std::cbegin( template_string ), std::cend( template_string ) ) );
 		}
@@ -108,11 +96,11 @@ namespace daw {
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
-			m_callbacks[name.to_string( )] = [callback = std::move( callback )]( daw::string_view str ) {
+			m_callbacks[name.to_string( )] = [callback = std::move( callback )] ( daw::string_view str ) mutable {
 				using daw::impl::to_string;
 				using std::to_string;
-				auto result = daw::apply_string2<ArgTypes...>( callback, str, "," );
-				return to_string( std::move( result ) );
+
+				return to_string( daw::apply_string<ArgTypes...>( callback, str, "," ) );
 			};
 		}
 
