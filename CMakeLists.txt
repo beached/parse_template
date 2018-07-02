@@ -34,9 +34,6 @@ if( EXISTS "${CMAKE_SOURCE_DIR}/dependent_projects/build" )
 else( )
 	set( SHOULD_BUILD_DEPS ON )
 	include( "${CMAKE_SOURCE_DIR}/dependent_projects/dependencies.txt" )
-
-	add_library( dependency_stub STATIC "${CMAKE_SOURCE_DIR}/dependent_projects/stub.cpp" )
-	add_dependencies( dependency_stub header_libraries_prj date_prj )
 endif( )
 
 set( HEADER_FOLDER "include" )

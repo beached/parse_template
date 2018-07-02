@@ -3,14 +3,14 @@
 // Copyright (c) 2014-2018 Darrell Wright
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files( the "Software" ), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and / or sell
-// copies of the Software, and to permit persons to whom the Software is
+// of this software and associated documentation files( the "Software" ), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and / or
+// sell copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -34,7 +34,6 @@
 
 namespace daw {
 	struct escaped_string {};
-	std::string parse_to_value( daw::string_view str, escaped_string );
 
 	namespace impl {
 
@@ -44,7 +43,9 @@ namespace daw {
 
 		template<typename ToStringFunc>
 		std::function<std::string( )> make_to_string_func( ToStringFunc func ) {
-			static_assert( daw::is_callable_v<ToStringFunc>, "ToStringFunc must be callable without arguments func( )" );
+			static_assert(
+			  daw::is_callable_v<ToStringFunc>,
+			  "ToStringFunc must be callable without arguments func( )" );
 			return [func = std::move( func )]( ) {
 				using daw::impl::to_string;
 				using std::to_string;
@@ -66,7 +67,9 @@ namespace daw {
 
 	class parse_template {
 		std::vector<impl::doc_parts> m_doc_builder;
-		std::unordered_map<std::string, std::function<std::string( daw::string_view )>> m_callbacks;
+		std::unordered_map<std::string,
+		                   std::function<std::string( daw::string_view )>>
+		  m_callbacks;
 
 		void process_template( daw::string_view template_str );
 		void parse_tag( daw::string_view tag );
@@ -76,19 +79,23 @@ namespace daw {
 		void process_text( string_view str );
 
 	public:
-		template<typename StringRange, std::enable_if_t<(daw::traits::is_container_like_v<StringRange> &&
-		                                                 daw::traits::is_value_size_equal_v<StringRange, 1>),
-		                                                std::nullptr_t> = nullptr>
+		template<
+		  typename StringRange,
+		  std::enable_if_t<(daw::traits::is_container_like_v<StringRange> &&
+		                    daw::traits::is_value_size_equal_v<StringRange, 1>),
+		                   std::nullptr_t> = nullptr>
 		parse_template( StringRange const &template_string )
-		  : m_doc_builder() 
-		  , m_callbacks() {
+		  : m_doc_builder( )
+		  , m_callbacks( ) {
 
-			process_template( daw::make_string_view_it( std::cbegin( template_string ), std::cend( template_string ) ) );
+			process_template( daw::make_string_view_it(
+			  std::cbegin( template_string ), std::cend( template_string ) ) );
 		}
 
 		template<typename Stream>
 		void to_string( Stream &strm ) {
-			daw::container::transform( m_doc_builder, daw::make_output_stream_iterator( strm ),
+			daw::container::transform( m_doc_builder,
+			                           daw::make_output_stream_iterator( strm ),
 			                           []( auto const &d ) { return d( ); } );
 		}
 
@@ -96,14 +103,20 @@ namespace daw {
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
-			m_callbacks[name.to_string( )] = [callback = std::move( callback )] ( daw::string_view str ) mutable {
-				using daw::impl::to_string;
-				using std::to_string;
+			m_callbacks[name.to_string( )] =
+			  [callback = std::move( callback )]( daw::string_view str ) mutable {
+				  using daw::impl::to_string;
+				  using std::to_string;
 
-				return to_string( daw::apply_string<ArgTypes...>( callback, str, "," ) );
-			};
+				  return to_string(
+				    daw::apply_string<ArgTypes...>( callback, str, "," ) );
+			  };
 		}
 
 		void process_timestamp_tag( string_view tag );
 	}; // class parse_template
 } // namespace daw
+
+std::string parse_to_value( daw::string_view str, daw::escaped_string );
+
+

@@ -40,24 +40,28 @@ int main( int argc, char const **argv ) {
 		exit( EXIT_FAILURE );
 	}
 
-	daw::filesystem::memory_mapped_file_t<char> template_str( argv[1] );
+	auto const template_str = daw::filesystem::memory_mapped_file_t<char>( argv[1] );
+
 	if( !template_str.is_open( ) ) {
 		std::cerr << "Error opening file: " << argv[1] << std::endl;
 		exit( EXIT_FAILURE );
 	}
 
-	daw::parse_template p{template_str};
+	auto p = daw::parse_template( template_str );
 
-	p.add_callback( "dummy_text_cb", []( ) { return std::string{"This is some dummy text"}; } );
+	p.add_callback( "dummy_text_cb", []( ) { return std::string("This is some dummy text"); } );
 
-	p.add_callback<int, int, daw::escaped_string>( "dummy_text_cb2", []( int a, int b, std::string str ) {
-		std::string msg = "From " + std::to_string( a ) + " to " + std::to_string( b ) + " we say " + str;
+	p.add_callback<int, int, daw::escaped_string>( "dummy_text_cb2", []( int a, int b, auto str ) {
+		using std::to_string;
+		using namespace std::string_literals;
+		std::string msg = "From "s + to_string( a ) + " to "s + to_string( b ) + " we say "s + str;
 		return msg;
 	} );
 
 	p.add_callback<size_t, daw::escaped_string, daw::escaped_string>(
 	  "repeat_test", []( size_t how_many, std::string prefix, std::string suffix ) {
-		  std::string result{};
+	  	auto result = std::string( );
+
 		  for( size_t n = 0; n < how_many; ++n ) {
 			  result += prefix + static_cast<char>( '0' + n ) + suffix;
 		  }
