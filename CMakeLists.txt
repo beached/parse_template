@@ -49,6 +49,9 @@ set( SOURCE_FILES
 	${SOURCE_FOLDER}/daw_parse_template.cpp
 )
 
+include_directories( SYSTEM "${CMAKE_BINARY_DIR}/install/include" )
+link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
+
 add_library ( parse_template STATIC ${HEADER_FILES} ${SOURCE_FILES} )
 add_dependencies( parse_template dependency_stub )
 target_link_libraries( parse_template char_range tz ${CURL_LIBRARIES} )

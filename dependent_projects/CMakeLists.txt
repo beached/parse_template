@@ -22,5 +22,8 @@ ENDIF()
 include_directories( "./include" )
 include_directories( SYSTEM ${Boost_INCLUDE_DIRS} )
 
+include_directories( SYSTEM "${CMAKE_BINARY_DIR}/install/include" )
+link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
+
 include( "dependencies.txt" )
 

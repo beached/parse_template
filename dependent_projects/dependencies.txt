@@ -27,8 +27,5 @@ externalproject_add(
 	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
 )
 
-include_directories( SYSTEM "${CMAKE_BINARY_DIR}/install/include" )
-link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
-
 add_custom_target( dependency_stub )
-add_dependencies( dependency_stub header_libraries_prj date_prj )
+add_dependencies( dependency_stub header_libraries_prj date_prj char_range_prj )
