@@ -32,7 +32,6 @@ if( EXISTS "${CMAKE_SOURCE_DIR}/dependent_projects/build" )
 	include_directories( SYSTEM "${CMAKE_SOURCE_DIR}/dependent_projects/build/install/include" )
 	link_directories( "${CMAKE_SOURCE_DIR}/dependent_projects/build/install/lib" )
 else( )
-	set( SHOULD_BUILD_DEPS ON )
 	include( "${CMAKE_SOURCE_DIR}/dependent_projects/dependencies.txt" )
 endif( )
 

@@ -15,7 +15,7 @@ externalproject_add(
 	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/date"
 	GIT_TAG "master"
 	INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
-	CMAKE_ARGS -DTZ_CXX_STANDARD=14 -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
+	CMAKE_ARGS -DCMAKE_CXX_STANDARD=14 -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
 )
 
 externalproject_add(
@@ -30,5 +30,5 @@ externalproject_add(
 include_directories( SYSTEM "${CMAKE_BINARY_DIR}/install/include" )
 link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
 
-add_library( dependency_stub STATIC stub.cpp )
+add_custom_target( dependency_stub )
 add_dependencies( dependency_stub header_libraries_prj date_prj )

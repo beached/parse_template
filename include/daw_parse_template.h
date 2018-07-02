@@ -34,6 +34,7 @@
 
 namespace daw {
 	struct escaped_string {};
+	std::string parse_to_value( daw::string_view str, daw::tag<escaped_string> );
 
 	namespace impl {
 
@@ -63,6 +64,30 @@ namespace daw {
 
 			std::string operator( )( ) const;
 		};
+
+		template<typename Container>
+		using detect_is_range =
+		  decltype( std::distance( std::cbegin( std::declval<Container>( ) ),
+		                           std::cend( std::declval<Container>( ) ) ) );
+
+		template<typename Container>
+		constexpr bool is_range_v = daw::is_detected_v<detect_is_range, Container>;
+
+		template<typename StringRange, std::enable_if_t<is_range_v<StringRange>,
+		                                                std::nullptr_t> = nullptr>
+		constexpr size_t value_size_test( ) noexcept {
+			return sizeof( *std::cbegin( std::declval<StringRange>( ) ) );
+		}
+
+		template<typename StringRange, std::enable_if_t<!is_range_v<StringRange>,
+		                                                std::nullptr_t> = nullptr>
+		constexpr size_t value_size_test( ) noexcept {
+			return 0;
+		}
+
+		template<typename StringRange>
+		constexpr size_t value_size_v = value_size_test<StringRange>( );
+
 	} // namespace impl
 
 	class parse_template {
@@ -79,18 +104,15 @@ namespace daw {
 		void process_text( string_view str );
 
 	public:
-		template<
-		  typename StringRange,
-		  std::enable_if_t<(daw::traits::is_container_like_v<StringRange> &&
-		                    daw::traits::is_value_size_equal_v<StringRange, 1>),
-		                   std::nullptr_t> = nullptr>
-		parse_template( StringRange const &template_string )
-		  : m_doc_builder( )
-		  , m_callbacks( ) {
+		parse_template( daw::string_view template_string );
 
-			process_template( daw::make_string_view_it(
-			  std::cbegin( template_string ), std::cend( template_string ) ) );
-		}
+		template<typename StringRange,
+		         std::enable_if_t<( impl::is_range_v<StringRange> &&
+		                            impl::value_size_v<StringRange> == 1 ),
+		                          std::nullptr_t> = nullptr>
+		parse_template( StringRange const &rng )
+		  : parse_template(
+		      daw::make_string_view_it( std::cbegin( rng ), std::cend( rng ) ) ) {}
 
 		template<typename Stream>
 		void to_string( Stream &strm ) {
@@ -116,7 +138,3 @@ namespace daw {
 		void process_timestamp_tag( string_view tag );
 	}; // class parse_template
 } // namespace daw
-
-std::string parse_to_value( daw::string_view str, daw::escaped_string );
-
-

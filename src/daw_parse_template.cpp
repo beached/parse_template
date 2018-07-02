@@ -250,6 +250,13 @@ namespace daw {
 		return ss.str( );
 	}
 
+	parse_template::parse_template( daw::string_view template_string )
+	  : m_doc_builder( )
+	  , m_callbacks( ) {
+
+		process_template( template_string );
+	}
+
 	std::string &impl::to_string( std::string &str ) noexcept {
 		return str;
 	}
@@ -292,23 +299,23 @@ namespace daw {
 			return str.to_string( );
 		}
 	} // namespace
-} // namespace daw
 
-std::string parse_to_value( daw::string_view str, daw::escaped_string ) {
-	auto result = std::string( );
-	bool in_escape = false;
+	std::string parse_to_value( daw::string_view str, daw::tag<escaped_string> ) {
+		auto result = std::string( );
+		bool in_escape = false;
 
-	while( !str.empty( ) ) {
-		auto const item = str.pop_front( );
-		if( in_escape ) {
-			in_escape = false;
-			result += daw::unescape( item );
-		} else if( item == '\\' ) {
-			in_escape = true;
-		} else {
-			result += item;
+		while( !str.empty( ) ) {
+			auto const item = str.pop_front( );
+			if( in_escape ) {
+				in_escape = false;
+				result += daw::unescape( item );
+			} else if( item == '\\' ) {
+				in_escape = true;
+			} else {
+				result += item;
+			}
 		}
+		return daw::trim_quotes( result );
 	}
-	return daw::trim_quotes( result );
-}
 
+} // namespace daw
