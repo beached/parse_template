@@ -54,7 +54,7 @@ link_directories( "${CMAKE_BINARY_DIR}/install/lib" )
 
 add_library ( parse_template STATIC ${HEADER_FILES} ${SOURCE_FILES} )
 add_dependencies( parse_template dependency_stub )
-target_link_libraries( parse_template char_range tz ${CURL_LIBRARIES} )
+target_link_libraries( parse_template tz ${CURL_LIBRARIES} )
 
 add_executable( example_parse_template ${HEADER_FILES} ${TEST_FOLDER}/example_parse_template.cpp )
 target_link_libraries( example_parse_template tz parse_template ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${COMPILER_SPECIFIC_LIBS} )

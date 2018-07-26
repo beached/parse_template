@@ -1,12 +1,12 @@
 include( ExternalProject )
 
 externalproject_add(
-    header_libraries_prj
-    GIT_REPOSITORY "https://github.com/beached/header_libraries.git"
-    SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/header_libraries"
-    GIT_TAG "master"
-    INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
+	header_libraries_prj
+	GIT_REPOSITORY "https://github.com/beached/header_libraries.git"
+	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/header_libraries"
+	GIT_TAG "master"
+	INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
+	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
 )
 
 externalproject_add(
@@ -18,14 +18,5 @@ externalproject_add(
 	CMAKE_ARGS -DCMAKE_CXX_STANDARD=14 -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
 )
 
-externalproject_add(
-	char_range_prj
-	GIT_REPOSITORY "https://github.com/beached/char_range.git"
-	SOURCE_DIR "${CMAKE_BINARY_DIR}/dependencies/char_range"
-	GIT_TAG "master"
-	INSTALL_DIR "${CMAKE_BINARY_DIR}/install"
-	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/install
-)
-
 add_custom_target( dependency_stub )
-add_dependencies( dependency_stub header_libraries_prj date_prj char_range_prj )
+add_dependencies( dependency_stub header_libraries_prj date_prj )
