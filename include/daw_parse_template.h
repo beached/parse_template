@@ -23,6 +23,7 @@
 #pragma once
 
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -45,7 +46,7 @@ namespace daw {
 		template<typename ToStringFunc>
 		std::function<std::string( )> make_to_string_func( ToStringFunc func ) {
 			static_assert(
-			  daw::is_callable_v<ToStringFunc>,
+			  std::is_invocable_v<ToStringFunc>,
 			  "ToStringFunc must be callable without arguments func( )" );
 			return [func = std::move( func )]( ) {
 				using daw::impl::to_string;
