@@ -19,7 +19,7 @@ include_directories( SYSTEM ${CURL_INCLUDE_DIRS} )
 link_directories( ${Boost_LIBRARY_DIRS} )
 
 set( DEP_ROOT_DIR_BASE "${CMAKE_SOURCE_DIR}/dependent_projects/build" )
-if( "${CMAKE_BUILD_TYPE}" EQUAL "Debug" )
+if( "${CMAKE_BUILD_TYPE}" STREQUAL "Debug" )
 	set( DEP_ROOT_DIR "${DEP_ROOT_DIR_BASE}/debug" )
 elseif( "${CMAKE_BUILD_TYPE}" STREQUAL "Release" )
 	set( DEP_ROOT_DIR "${DEP_ROOT_DIR_BASE}/release" )
