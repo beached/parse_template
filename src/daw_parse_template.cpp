@@ -23,6 +23,7 @@
 #include <date/date.h>
 
 #include <date/tz.h>
+#include <daw/daw_move.h>
 #include <daw/daw_string_view.h>
 
 #include "daw_parse_template.h"
@@ -262,7 +263,7 @@ namespace daw {
 	}
 
 	std::string impl::to_string( std::string &&str ) noexcept {
-		return std::move( str );
+		return daw::move( str );
 	}
 
 	std::string impl::doc_parts::operator( )( ) const {
@@ -300,7 +301,7 @@ namespace daw {
 		}
 	} // namespace
 
-	std::string parse_to_value( daw::string_view str, daw::tag<escaped_string> ) {
+	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> ) {
 		auto result = std::string( );
 		bool in_escape = false;
 

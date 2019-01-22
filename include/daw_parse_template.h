@@ -28,6 +28,7 @@
 #include <vector>
 
 #include <daw/daw_container_algorithm.h>
+#include <daw/daw_move.h>
 #include <daw/daw_parse_to.h>
 #include <daw/daw_string_view.h>
 #include <daw/daw_traits.h>
@@ -35,7 +36,7 @@
 
 namespace daw {
 	struct escaped_string {};
-	std::string parse_to_value( daw::string_view str, daw::tag<escaped_string> );
+	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> );
 
 	namespace impl {
 
@@ -48,7 +49,7 @@ namespace daw {
 			static_assert(
 			  std::is_invocable_v<ToStringFunc>,
 			  "ToStringFunc must be callable without arguments func( )" );
-			return [func = std::move( func )]( ) {
+			return [func = daw::move( func )]( ) {
 				using daw::impl::to_string;
 				using std::to_string;
 				return to_string( func( ) );
@@ -61,7 +62,7 @@ namespace daw {
 		public:
 			template<typename ToStringFunc>
 			doc_parts( ToStringFunc to_string_func )
-			  : m_to_string( make_to_string_func( std::move( to_string_func ) ) ) {}
+			  : m_to_string( make_to_string_func( daw::move( to_string_func ) ) ) {}
 
 			std::string operator( )( ) const;
 		};
@@ -127,7 +128,7 @@ namespace daw {
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
 			m_callbacks[name.to_string( )] =
-			  [callback = std::move( callback )]( daw::string_view str ) mutable {
+			  [callback = daw::move( callback )]( daw::string_view str ) mutable {
 				  using daw::impl::to_string;
 				  using std::to_string;
 
