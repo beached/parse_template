@@ -11,10 +11,11 @@ set(CMAKE_CXX_STANDARD 17 CACHE STRING "The C++ standard whose features are requ
 option(DAW_ENABLE_TESTING "Build unit tests and examples" OFF)
 option(DAW_USE_PACKAGE_MANAGEMENT "Do not use FetchContent and assume dependencies are installed" OFF)
 option(DAW_SKIP_DEPS "Do not install deps, let parent" OFF)
+set(DAW_TARGET_PARSE_TEMPLATE ON "Flag to indicate that library is included")
 
-if (NOT DAW_USE_PACKAGE_MANAGEMENT AND NOT DAW_SKIP_DEPS)
+if (NOT DAW_USE_PACKAGE_MANAGEMENT)
     add_subdirectory(extern)
-elseif (DAW_USE_PACKAGE_MANAGEMENT)
+else ()
     find_package(daw-header-libraries REQUIRED)
 endif ()
 
