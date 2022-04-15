@@ -9,8 +9,14 @@ project(daw-parse-template
 
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "The C++ standard whose features are requested.")
 option(DAW_ENABLE_TESTING "Build unit tests and examples" OFF)
+option(DAW_USE_PACKAGE_MANAGEMENT "Do not use FetchContent and assume dependencies are installed" OFF)
+option(DAW_SKIP_DEPS "Do not install deps, let parent" OFF)
 
-add_subdirectory(extern)
+if (NOT DAW_USE_PACKAGE_MANAGEMENT AND NOT DAW_SKIP_DEPS)
+    add_subdirectory(extern)
+elseif (DAW_USE_PACKAGE_MANAGEMENT)
+    find_package(daw-header-libraries REQUIRED)
+endif ()
 
 find_package(date CONFIG REQUIRED)
 
