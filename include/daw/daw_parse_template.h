@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 //
-// Copyright (c) 2014-2018 Darrell Wright
+// Copyright (c) Darrell Wright
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files( the "Software" ), to
@@ -22,11 +22,6 @@
 
 #pragma once
 
-#include <string>
-#include <type_traits>
-#include <unordered_map>
-#include <vector>
-
 #include <daw/daw_container_algorithm.h>
 #include <daw/daw_move.h>
 #include <daw/daw_parse_to.h>
@@ -34,10 +29,24 @@
 #include <daw/daw_traits.h>
 #include <daw/iterator/daw_output_stream_iterator.h>
 
+#include <string>
+#include <type_traits>
+#include <unordered_map>
+#include <vector>
+
 namespace daw {
 	struct escaped_string {};
 	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> );
 
+	namespace parse_template_impl {
+		template<typename T>
+		using detect_sv_conv = decltype( daw::basic_string_view( std::data( std::declval<T &>( ) ),
+		                                                         std::size( std::declval<T &>( ) ) ) );
+
+		template<typename T>
+		using StringViewConvertible =
+		  std::enable_if_t<daw::is_detected_v<detect_sv_conv, T>, std::nullptr_t>;
+	} // namespace parse_template_impl
 	namespace impl {
 
 		std::string &to_string( std::string &str ) noexcept;
@@ -46,9 +55,8 @@ namespace daw {
 
 		template<typename ToStringFunc>
 		std::function<std::string( )> make_to_string_func( ToStringFunc func ) {
-			static_assert(
-			  std::is_invocable_v<ToStringFunc>,
-			  "ToStringFunc must be callable without arguments func( )" );
+			static_assert( std::is_invocable_v<ToStringFunc>,
+			               "ToStringFunc must be callable without arguments func( )" );
 			return [func = daw::move( func )]( ) {
 				using daw::impl::to_string;
 				using std::to_string;
@@ -68,21 +76,20 @@ namespace daw {
 		};
 
 		template<typename Container>
-		using detect_is_range =
-		  decltype( std::distance( std::cbegin( std::declval<Container>( ) ),
-		                           std::cend( std::declval<Container>( ) ) ) );
+		using detect_is_range = decltype( std::distance( std::cbegin( std::declval<Container>( ) ),
+		                                                 std::cend( std::declval<Container>( ) ) ) );
 
 		template<typename Container>
 		constexpr bool is_range_v = daw::is_detected_v<detect_is_range, Container>;
 
-		template<typename StringRange, std::enable_if_t<is_range_v<StringRange>,
-		                                                std::nullptr_t> = nullptr>
+		template<typename StringRange,
+		         std::enable_if_t<is_range_v<StringRange>, std::nullptr_t> = nullptr>
 		constexpr size_t value_size_test( ) noexcept {
 			return sizeof( *std::cbegin( std::declval<StringRange>( ) ) );
 		}
 
-		template<typename StringRange, std::enable_if_t<!is_range_v<StringRange>,
-		                                                std::nullptr_t> = nullptr>
+		template<typename StringRange,
+		         std::enable_if_t<!is_range_v<StringRange>, std::nullptr_t> = nullptr>
 		constexpr size_t value_size_test( ) noexcept {
 			return 0;
 		}
@@ -94,9 +101,7 @@ namespace daw {
 
 	class parse_template {
 		std::vector<impl::doc_parts> m_doc_builder;
-		std::unordered_map<std::string,
-		                   std::function<std::string( daw::string_view )>>
-		  m_callbacks;
+		std::unordered_map<std::string, std::function<std::string( daw::string_view )>> m_callbacks;
 
 		void process_template( daw::string_view template_str );
 		void parse_tag( daw::string_view tag );
@@ -108,13 +113,9 @@ namespace daw {
 	public:
 		parse_template( daw::string_view template_string );
 
-		template<typename StringRange,
-		         std::enable_if_t<( impl::is_range_v<StringRange> &&
-		                            impl::value_size_v<StringRange> == 1 ),
-		                          std::nullptr_t> = nullptr>
-		parse_template( StringRange const &rng )
-		  : parse_template(
-		      daw::make_string_view_it( std::cbegin( rng ), std::cend( rng ) ) ) {}
+		template<typename StringView, parse_template_impl::StringViewConvertible<StringView> = nullptr>
+		parse_template( StringView &&rng )
+		  : parse_template( daw::string_view( std::data( rng ), std::size( rng ) ) ) {}
 
 		template<typename Stream>
 		void to_string( Stream &strm ) {
@@ -127,13 +128,12 @@ namespace daw {
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
-			m_callbacks[name.to_string( )] =
+			m_callbacks[static_cast<std::string>( name )] =
 			  [callback = daw::move( callback )]( daw::string_view str ) mutable {
 				  using daw::impl::to_string;
 				  using std::to_string;
 
-				  return to_string(
-				    daw::apply_string<ArgTypes...>( callback, str, "," ) );
+				  return to_string( daw::apply_string<ArgTypes...>( callback, str, "," ) );
 			  };
 		}
 

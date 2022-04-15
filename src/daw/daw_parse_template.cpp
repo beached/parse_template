@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 //
-// Copyright (c) 2014-2018 Darrell Wright
+// Copyright (c) Darrell Wright
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files( the "Software" ), to
@@ -20,13 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include <date/date.h>
+#include "daw/daw_parse_template.h"
 
-#include <date/tz.h>
 #include <daw/daw_move.h>
 #include <daw/daw_string_view.h>
 
-#include "daw_parse_template.h"
+#include <date/date.h>
+#include <date/tz.h>
 
 namespace daw {
 	void parse_template::process_text( daw::string_view str ) {
@@ -34,33 +34,34 @@ namespace daw {
 			daw::string_view str;
 
 			std::string operator( )( ) const noexcept {
-				return str.to_string( );
+				return static_cast<std::string>( str );
 			}
 		};
-		m_doc_builder.emplace_back( raw_text_func{str} );
+		m_doc_builder.emplace_back( raw_text_func{ str } );
 	}
 
 	void parse_template::process_template( daw::string_view template_str ) {
 
-		process_text( template_str.pop_front( "<%" ) );
-		while( !template_str.empty( ) ) {
-			auto item = template_str.pop_front( "%>" );
-			daw::exception::Assert( !template_str.empty( ), "Unexpected empty tag" );
+		process_text( template_str.pop_front_until( "<%" ) );
+		while( not template_str.empty( ) ) {
+			auto item = template_str.pop_front_until( "%>" );
+			daw::exception::Assert( not template_str.empty( ), "Unexpected empty tag" );
 
 			parse_tag( item );
-			process_text( template_str.pop_front( "<%" ) );
+			process_text( template_str.pop_front_until( "<%" ) );
 		}
 	}
 
 	namespace {
 		constexpr void remove_leading_whitespace( daw::string_view &sv ) noexcept {
 			size_t count = 0;
-			while( !sv.empty( ) && daw::parser::is_unicode_whitespace( sv[count] ) ) {
+			while( not sv.empty( ) and daw::parser::is_unicode_whitespace( sv[count] ) ) {
 				++count;
 			}
 			sv.remove_prefix( count );
 		}
 	} // namespace
+
 	void parse_template::parse_tag( daw::string_view tag ) {
 		using namespace daw::string_view_literals;
 
@@ -94,7 +95,7 @@ namespace daw {
 					continue;
 				} else {
 					if( str[n] == '"' ) {
-						if( !in_slash ) {
+						if( not in_slash ) {
 							return n;
 						}
 					}
@@ -106,7 +107,7 @@ namespace daw {
 
 		constexpr daw::string_view find_args( daw::string_view tag ) {
 			using namespace daw::string_view_literals;
-			tag.pop_front( R"(args=")" );
+			tag.remove_prefix_until( R"(args=")" );
 			if( tag.empty( ) ) {
 				return tag;
 			}
@@ -119,15 +120,14 @@ namespace daw {
 
 		std::vector<daw::string_view> find_split_args( daw::string_view tag ) {
 			tag = find_args( tag );
-			std::vector<daw::string_view> results{};
+			std::vector<daw::string_view> results{ };
 			bool in_quote = false;
 			bool is_escaped = false;
 			size_t last_pos = 0;
 			for( size_t n = 0; n < tag.size( ); ++n ) {
 				switch( tag[n] ) {
 				case '"':
-					daw::exception::daw_throw_on_true(
-					  !is_escaped, "Unexpected unescaped double-quote" );
+					daw::exception::daw_throw_on_true( !is_escaped, "Unexpected unescaped double-quote" );
 					in_quote = !in_quote;
 					continue;
 				case '\\':
@@ -150,39 +150,35 @@ namespace daw {
 	void parse_template::process_call_tag( daw::string_view tag ) {
 		using namespace daw::string_view_literals;
 		tag = find_args( tag );
-		daw::exception::daw_throw_on_true( tag.empty( ),
-		                                   "Could not find start of call args" );
-		auto callable_name = tag.pop_front( "," );
+		daw::exception::daw_throw_on_true( tag.empty( ), "Could not find start of call args" );
+		auto callable_name = tag.pop_front_until( "," );
 		daw::exception::daw_throw_on_true( callable_name.empty( ),
 		                                   "Invalid call name, cannot be empty" );
 
-		m_callbacks[callable_name.to_string( )] = nullptr;
+		m_callbacks[static_cast<std::string>( callable_name )] = nullptr;
 
 		m_doc_builder.emplace_back( [callable_name, tag, this]( ) {
-			auto cb = m_callbacks[callable_name.to_string( )];
-			daw::exception::daw_throw_on_false(
-			  cb, "Attempt to call an undefined function" );
+			auto cb = m_callbacks[static_cast<std::string>( callable_name )];
+			daw::exception::daw_throw_on_false( cb, "Attempt to call an undefined function" );
 			return cb( tag );
 		} );
 	}
 
 	void parse_template::process_date_tag( daw::string_view str ) {
 		auto args = find_split_args( str );
-		daw::exception::daw_throw_on_false( args.size( ) <= 1,
-		                                    "Unexpected argument count" );
+		daw::exception::daw_throw_on_false( args.size( ) <= 1, "Unexpected argument count" );
 		auto const tz = [&]( ) {
 			if( args.empty( ) || args[0].empty( ) ) {
 				return date::current_zone( );
 			}
-			return date::locate_zone( args[0].to_string( ).c_str( ) );
+			return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
 		}( );
 
 		m_doc_builder.emplace_back( [tz]( ) {
 			using namespace date;
 			using namespace std::chrono;
-			std::stringstream ss{};
-			auto const current_time =
-			  date::make_zoned( tz, std::chrono::system_clock::now( ) );
+			std::stringstream ss{ };
+			auto const current_time = date::make_zoned( tz, std::chrono::system_clock::now( ) );
 			ss << date::format( "%Y-%m-%d", current_time );
 			return ss.str( );
 		} );
@@ -190,20 +186,19 @@ namespace daw {
 
 	void parse_template::process_time_tag( daw::string_view str ) {
 		auto args = find_split_args( str );
-		daw::exception::daw_throw_on_false( args.size( ) <= 1,
-		                                    "Unexpected argument count" );
+		daw::exception::daw_throw_on_false( args.size( ) <= 1, "Unexpected argument count" );
 		auto const tz = [&]( ) {
 			if( args.empty( ) || args[0].empty( ) ) {
 				return date::current_zone( );
 			}
-			return date::locate_zone( args[0].to_string( ).c_str( ) );
+			return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
 		}( );
 		m_doc_builder.emplace_back( [tz]( ) {
 			using namespace date;
 			using namespace std::chrono;
-			std::stringstream ss{};
-			auto const current_time = date::make_zoned(
-			  tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
+			std::stringstream ss{ };
+			auto const current_time =
+			  date::make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
 			ss << date::format( "%T", current_time );
 			return ss.str( );
 		} );
@@ -212,33 +207,29 @@ namespace daw {
 	void parse_template::process_timestamp_tag( daw::string_view str ) {
 		static char const default_ts_fmt[] = "%Y-%m-%dT%T%z";
 		auto args = find_split_args( str );
-		daw::exception::daw_throw_on_false( args.size( ) <= 2,
-		                                    "Unexpected argument count" );
+		daw::exception::daw_throw_on_false( args.size( ) <= 2, "Unexpected argument count" );
 
-		std::string const ts_fmt =
-		  [&]( ) {
-			  if( args.empty( ) || args[0].empty( ) ) {
-				  return daw::string_view{default_ts_fmt};
-			  }
-			  return args[0];
-		  }( )
-		    .to_string( );
+		std::string const ts_fmt = static_cast<std::string>( [&]( ) {
+			if( args.empty( ) || args[0].empty( ) ) {
+				return daw::string_view{ default_ts_fmt };
+			}
+			return args[0];
+		}( ) );
 
 		auto const tz = [&]( ) {
 			if( args.size( ) < 2 || args[1].empty( ) ) {
 				return date::current_zone( );
 			}
-			return date::locate_zone( args[1].to_string( ).c_str( ) );
+			return date::locate_zone( static_cast<std::string>( args[1] ).c_str( ) );
 		}( );
 
 		m_doc_builder.emplace_back( [ts_fmt, tz]( ) {
 			using namespace date;
 			using namespace std::chrono;
 
-			std::stringstream ss{};
+			std::stringstream ss{ };
 
-			auto current_time =
-			  make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
+			auto current_time = make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
 			ss << format( ts_fmt, current_time );
 
 			return ss.str( );
@@ -246,7 +237,7 @@ namespace daw {
 	}
 
 	std::string parse_template::to_string( ) {
-		std::stringstream ss{};
+		std::stringstream ss{ };
 		to_string( ss );
 		return ss.str( );
 	}
@@ -297,7 +288,7 @@ namespace daw {
 				str.remove_prefix( );
 				str.remove_suffix( );
 			}
-			return str.to_string( );
+			return static_cast<std::string>( str );
 		}
 	} // namespace
 

@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 //
-// Copyright (c) 2014-2018 Darrell Wright
+// Copyright (c) Darrell Wright
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files( the "Software" ), to
@@ -20,20 +20,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include <cstdlib>
-#include <ctime>
-#include <iostream>
+#include <daw/daw_parse_template.h>
 
 #include <date/date.h>
 #include <date/tz.h>
 #include <daw/daw_memory_mapped_file.h>
 #include <daw/daw_string_view.h>
 
-#include "daw_parse_template.h"
+#include <cstdlib>
+#include <ctime>
+#include <iostream>
 
 int main( int argc, char const **argv ) {
-	auto const current_time = date::make_zoned(
-	  date::current_zone( ), std::chrono::system_clock::now( ) );
+	auto const current_time =
+	  date::make_zoned( date::current_zone( ), std::chrono::system_clock::now( ) );
 	std::cout << "Starting at: " << current_time << '\n';
 
 	if( argc <= 1 ) {
@@ -41,25 +41,23 @@ int main( int argc, char const **argv ) {
 		exit( EXIT_FAILURE );
 	}
 
-	auto const template_str =
-	  daw::filesystem::memory_mapped_file_t<char>( argv[1] );
+	auto const template_str = daw::filesystem::memory_mapped_file_t<char>( argv[1] );
 
-	if( !template_str.is_open( ) ) {
+	if( not template_str ) {
 		std::cerr << "Error opening file: " << argv[1] << std::endl;
 		exit( EXIT_FAILURE );
 	}
 
 	auto p = daw::parse_template( template_str );
 
-	p.add_callback( "dummy_text_cb",
-	                []( ) { return "This is some dummy text"; } );
+	p.add_callback( "dummy_text_cb", []( ) { return "This is some dummy text"; } );
 
 	p.add_callback<int, int, daw::escaped_string>(
-	  "dummy_text_cb2", []( int a, int b, std::string str ) {
+	  "dummy_text_cb2",
+	  []( int a, int b, std::string str ) {
 		  using std::to_string;
 		  using namespace std::string_literals;
-		  std::string msg = "From "s + to_string( a ) + " to "s + to_string( b ) +
-		                    " we say "s + str;
+		  std::string msg = "From "s + to_string( a ) + " to "s + to_string( b ) + " we say "s + str;
 		  return msg;
 	  } );
 
