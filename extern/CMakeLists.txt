@@ -12,9 +12,9 @@ set(DAW_ENABLE_TESTING OFF)
 
 if (NOT DAW_TARGET_HEADER_LIBRARIES)
     FetchContent_Declare(
-            daw-header-libraries
+            daw_header_libraries
             GIT_REPOSITORY https://github.com/beached/header_libraries.git
     )
-    FetchContent_MakeAvailable(daw-header-libraries)
+    FetchContent_MakeAvailable(daw_header_libraries)
 endif ()
 
