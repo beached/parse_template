@@ -3,7 +3,6 @@
   "name": "daw-parse-template",
   "version": "0.1.0",
   "dependencies": [
-    "boost",
     "date"
   ]
 }

@@ -24,6 +24,7 @@
 
 #include <daw/daw_move.h>
 #include <daw/daw_string_view.h>
+#include <daw/io/daw_write_proxy.h>
 
 #include <date/date.h>
 #include <date/tz.h>
@@ -33,15 +34,24 @@ namespace daw {
 		struct raw_text_func {
 			daw::string_view str;
 
+			explicit constexpr raw_text_func( daw::string_view sv )
+			  : str( sv ) {}
+
 			std::string operator( )( ) const noexcept {
 				return static_cast<std::string>( str );
+			}
+
+			void operator( )( daw::io::WriteProxy prox ) const {
+				auto ret = prox.write( str );
+				if( ret.status != io::IOOpStatus::Ok ) {
+					daw::exception::daw_throw( "Error writing to output" );
+				}
 			}
 		};
 		m_doc_builder.emplace_back( raw_text_func{ str } );
 	}
 
 	void parse_template::process_template( daw::string_view template_str ) {
-
 		process_text( template_str.pop_front_until( "<%" ) );
 		while( not template_str.empty( ) ) {
 			auto item = template_str.pop_front_until( "%>" );
@@ -54,11 +64,7 @@ namespace daw {
 
 	namespace {
 		constexpr void remove_leading_whitespace( daw::string_view &sv ) noexcept {
-			size_t count = 0;
-			while( not sv.empty( ) and daw::parser::is_unicode_whitespace( sv[count] ) ) {
-				++count;
-			}
-			sv.remove_prefix( count );
+			sv.remove_prefix_while( []( char c ) { return daw::parser::is_unicode_whitespace( c ); } );
 		}
 	} // namespace
 
@@ -127,14 +133,14 @@ namespace daw {
 			for( size_t n = 0; n < tag.size( ); ++n ) {
 				switch( tag[n] ) {
 				case '"':
-					daw::exception::daw_throw_on_true( !is_escaped, "Unexpected unescaped double-quote" );
-					in_quote = !in_quote;
+					daw::exception::daw_throw_on_true( not is_escaped, "Unexpected unescaped double-quote" );
+					in_quote = not in_quote;
 					continue;
 				case '\\':
-					is_escaped = !is_escaped;
+					is_escaped = not is_escaped;
 					continue;
 				case ',':
-					if( !in_quote ) {
+					if( not in_quote ) {
 						results.emplace_back( &tag[last_pos], n - last_pos );
 						last_pos = n + 1;
 					}
@@ -158,7 +164,7 @@ namespace daw {
 		m_callbacks[static_cast<std::string>( callable_name )] = nullptr;
 
 		m_doc_builder.emplace_back( [callable_name, tag, this]( ) {
-			auto cb = m_callbacks[static_cast<std::string>( callable_name )];
+			auto &cb = m_callbacks[static_cast<std::string>( callable_name )];
 			daw::exception::daw_throw_on_false( cb, "Attempt to call an undefined function" );
 			return cb( tag );
 		} );
@@ -236,10 +242,18 @@ namespace daw {
 		} );
 	}
 
+	void parse_template::write_to( daw::io::WriteProxy writable ) {
+		for( auto const &part : m_doc_builder ) {
+			if( auto result = writable.write( part( ) ); result.status != io::IOOpStatus::Ok ) {
+				daw::exception::daw_throw( "Error writing to output" );
+			}
+		}
+	}
+
 	std::string parse_template::to_string( ) {
-		std::stringstream ss{ };
-		to_string( ss );
-		return ss.str( );
+		auto result = std::string( );
+		write_to( daw::io::WriteProxy( result ) );
+		return result;
 	}
 
 	parse_template::parse_template( daw::string_view template_string )
@@ -254,7 +268,7 @@ namespace daw {
 	}
 
 	std::string impl::to_string( std::string &&str ) noexcept {
-		return daw::move( str );
+		return std::move( str );
 	}
 
 	std::string impl::doc_parts::operator( )( ) const {
@@ -284,7 +298,7 @@ namespace daw {
 		}
 
 		std::string trim_quotes( daw::string_view str ) {
-			if( str.size( ) >= 2 && str.front( ) == '"' && str.back( ) == '"' ) {
+			if( str.size( ) >= 2 and str.front( ) == '"' and str.back( ) == '"' ) {
 				str.remove_prefix( );
 				str.remove_suffix( );
 			}
@@ -296,7 +310,7 @@ namespace daw {
 		auto result = std::string( );
 		bool in_escape = false;
 
-		while( !str.empty( ) ) {
+		while( not str.empty( ) ) {
 			auto const item = str.pop_front( );
 			if( in_escape ) {
 				in_escape = false;

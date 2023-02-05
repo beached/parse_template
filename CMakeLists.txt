@@ -23,7 +23,7 @@ find_package(date CONFIG REQUIRED)
 include_directories(include)
 
 add_library(${PROJECT_NAME} src/daw/daw_parse_template.cpp)
-target_link_libraries(${PROJECT_NAME} PUBLIC daw::daw-header-libraries date::date date::date-tz)
+target_link_libraries(${PROJECT_NAME} PUBLIC daw::daw-header-libraries daw-read-write date::date date::date-tz)
 add_library(daw::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
 install(TARGETS ${PROJECT_NAME} DESTINATION lib)

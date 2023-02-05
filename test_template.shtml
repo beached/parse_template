@@ -37,5 +37,10 @@ Some dummy test<pre><%call args="dummy_text_cb"%></pre>
 <ol>
 	<%call args="repeat_test,5,\"<li>\",\"</li>\""%>
 </ol>
+<ol>
+	Stateful count: <pre><%call args="stateful_test"%></pre>
+	Stateful count: <pre><%call args="stateful_test"%></pre>
+	Stateful count: <pre><%call args="stateful_test"%></pre>
+</ol>
 </body>
 </html>

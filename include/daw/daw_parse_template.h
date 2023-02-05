@@ -22,11 +22,14 @@
 
 #pragma once
 
+#include "parse_template_impl/daw_function_traits.h"
+
 #include <daw/daw_container_algorithm.h>
 #include <daw/daw_move.h>
 #include <daw/daw_parse_to.h>
 #include <daw/daw_string_view.h>
 #include <daw/daw_traits.h>
+#include <daw/io/daw_write_proxy.h>
 #include <daw/iterator/daw_output_stream_iterator.h>
 
 #include <string>
@@ -35,7 +38,9 @@
 #include <vector>
 
 namespace daw {
-	struct escaped_string {};
+	struct escaped_string {
+		explicit escaped_string( ) = default;
+	};
 	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> );
 
 	namespace parse_template_impl {
@@ -48,6 +53,18 @@ namespace daw {
 		  std::enable_if_t<daw::is_detected_v<detect_sv_conv, T>, std::nullptr_t>;
 	} // namespace parse_template_impl
 	namespace impl {
+		template<typename T>
+		struct actual_type {
+			using type = T;
+		};
+
+		template<>
+		struct actual_type<escaped_string> {
+			using type = std::string;
+		};
+
+		template<typename T>
+		using actual_type_t = typename actual_type<T>::type;
 
 		std::string &to_string( std::string &str ) noexcept;
 
@@ -57,7 +74,7 @@ namespace daw {
 		std::function<std::string( )> make_to_string_func( ToStringFunc func ) {
 			static_assert( std::is_invocable_v<ToStringFunc>,
 			               "ToStringFunc must be callable without arguments func( )" );
-			return [func = daw::move( func )]( ) {
+			return [func = std::move( func )]( ) {
 				using daw::impl::to_string;
 				using std::to_string;
 				return to_string( func( ) );
@@ -70,7 +87,7 @@ namespace daw {
 		public:
 			template<typename ToStringFunc>
 			doc_parts( ToStringFunc to_string_func )
-			  : m_to_string( make_to_string_func( daw::move( to_string_func ) ) ) {}
+			  : m_to_string( make_to_string_func( std::move( to_string_func ) ) ) {}
 
 			std::string operator( )( ) const;
 		};
@@ -111,30 +128,29 @@ namespace daw {
 		void process_text( string_view str );
 
 	public:
-		parse_template( daw::string_view template_string );
+		explicit parse_template( daw::string_view template_string );
 
-		template<typename StringView, parse_template_impl::StringViewConvertible<StringView> = nullptr>
-		parse_template( StringView &&rng )
-		  : parse_template( daw::string_view( std::data( rng ), std::size( rng ) ) ) {}
-
-		template<typename Stream>
-		void to_string( Stream &strm ) {
-			daw::container::transform( m_doc_builder,
-			                           daw::make_output_stream_iterator( strm ),
-			                           []( auto const &d ) { return d( ); } );
+		template<typename Writable>
+		void to_string( Writable &&wr ) {
+			return write_to( daw::io::WriteProxy( wr ) );
 		}
 
 		std::string to_string( );
+		void write_to( daw::io::WriteProxy writable );
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
-			m_callbacks[static_cast<std::string>( name )] =
-			  [callback = daw::move( callback )]( daw::string_view str ) mutable {
-				  using daw::impl::to_string;
-				  using std::to_string;
-
-				  return to_string( daw::apply_string<ArgTypes...>( callback, str, "," ) );
-			  };
+			m_callbacks.insert_or_assign(
+			  static_cast<std::string>( name ),
+			  [callback = std::move( callback )]( daw::string_view str ) mutable {
+				  if constexpr( std::is_same_v<std::string, std::invoke_result<Callback, ArgTypes...>> ) {
+					  return daw::apply_string<ArgTypes...>( callback, str, "," );
+				  } else {
+					  using daw::impl::to_string;
+					  using std::to_string;
+					  return to_string( daw::apply_string<ArgTypes...>( callback, str, "," ) );
+				  }
+			  } );
 		}
 
 		void process_timestamp_tag( string_view tag );

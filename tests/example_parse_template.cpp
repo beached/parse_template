@@ -72,6 +72,11 @@ int main( int argc, char const **argv ) {
 		  return result;
 	  } );
 
+	p.add_callback( "stateful_test", [count = 0]( ) mutable {
+		++count;
+		return count;
+	} );
+
 	p.to_string( std::cout );
 	p.to_string( std::cout );
 
