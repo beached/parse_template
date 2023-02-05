@@ -250,17 +250,12 @@ namespace daw {
 		} );
 	}
 
-	void parse_template::write_to( daw::io::WriteProxy &writable, void *state ) {
+	void parse_template::write_to_impl( daw::io::WriteProxy &writable, void *state ) {
 		for( auto const &part : m_doc_builder ) {
 			part( writable, state );
 		}
 	}
 
-	std::string parse_template::to_string( void *state ) {
-		auto result = std::string( );
-		write_to( daw::io::WriteProxy( result ), state );
-		return result;
-	}
 
 	parse_template::parse_template( daw::string_view template_string )
 	  : m_doc_builder( )

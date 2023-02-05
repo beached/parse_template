@@ -70,3 +70,16 @@ tmp.add_callback<daw::escaped_string, daw::escaped_string>( []( std::string a, s
 ```
 
 The previous function takes 2 string parameters and uses the writer to write them to the callers output.
+
+## Stateful Callbacks
+Stateful callbacks allow for passing a mutable parameter to the callback.
+
+```cpp
+tmp.add_stateful_callback<int>( "name", []( int & x ) {
+    return x;
+});
+tmp.add_stateful_callback<int, daw::escaped_string, unsigned>( "name", []( std::string s, unsigned u, int & x ) {
+    using std::to_string;
+    return s + to_string( u ) + ":" + to_string( x );
+});
+```

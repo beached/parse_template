@@ -76,18 +76,15 @@ int main( int argc, char const **argv ) {
 		  return result;
 	  } );
 
-	int x = 5;
-	p.add_callback( "stateful_test", [count = 0U]( void *s ) mutable {
-		int *v = reinterpret_cast<int *>( s );
-		if( v ) {
-			++( *v );
-		}
+	int x = 1;
+	p.add_stateful_callback<int>( "stateful_test", [count = 0]( int &v ) mutable {
 		++count;
-		return count + ( v ? *v : 0 );
+		return count * v;
 	} );
 
-	p.write_to( std::cout, &x );
-	p.write_to( std::cout );
+	p.write_to( std::cout, x );
+	x = -x;
+	p.write_to( std::cout, x );
 
 	return EXIT_SUCCESS;
 }

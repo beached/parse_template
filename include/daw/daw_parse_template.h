@@ -180,6 +180,33 @@ namespace daw {
 				};
 			}
 		}
+
+		template<typename StateType, typename... ArgTypes, typename Callback>
+		auto make_stateful_callback( Callback &&callback ) {
+			using state_t = std::remove_reference_t<StateType>;
+			if constexpr( std::is_invocable_v<Callback,
+			                                  actual_type_t<ArgTypes>...,
+			                                  daw::io::WriteProxy &,
+			                                  state_t &> ) {
+				return [callback = DAW_FWD(
+				          callback )]( auto &&...args, daw::io::WriteProxy &writer, void *state ) mutable {
+					if( not state ) {
+						daw::exception::daw_throw(
+						  "Stateful function expects state param on write_to/to_string call" );
+					}
+					return callback( DAW_FWD( args )..., writer, *reinterpret_cast<state_t *>( state ) );
+				};
+			} else {
+				static_assert( std::is_invocable_v<Callback, actual_type_t<ArgTypes>..., state_t &> );
+				return [callback = DAW_FWD( callback )]( auto &&...args, void *state ) mutable {
+					if( not state ) {
+						daw::exception::daw_throw(
+						  "Stateful function expects state param on write_to/to_string call" );
+					}
+					return callback( DAW_FWD( args )..., *reinterpret_cast<state_t *>( state ) );
+				};
+			}
+		}
 	} // namespace impl
 
 	class parse_template {
@@ -195,33 +222,76 @@ namespace daw {
 		void process_time_tag( daw::string_view tag );
 		void process_text( string_view str );
 
+		void write_to_impl( daw::io::WriteProxy &writable, void *state );
+
 	public:
 		explicit parse_template( daw::string_view template_string );
 
 		template<typename Writable>
-		void write_to( Writable &&wr, void *state = nullptr ) {
+		void write_to( Writable &wr ) {
+			return write_to( daw::io::WriteProxy( wr ) );
+		}
+
+		template<typename Writable, typename T>
+		void write_to( Writable &wr, T &&state ) {
 			return write_to( daw::io::WriteProxy( wr ), state );
 		}
 
-		std::string to_string( void * state = nullptr );
-		void write_to( daw::io::WriteProxy &writable, void *state = nullptr );
+		std::string to_string( ) {
+			auto result = std::string( );
+			write_to( daw::io::WriteProxy( result ) );
+			return result;
+		}
 
-		inline void write_to( daw::io::WriteProxy &&writable, void *state = nullptr ) {
+		template<typename T>
+		std::string to_string( T &state ) {
+			auto result = std::string( );
+			write_to( daw::io::WriteProxy( result ), state );
+			return result;
+		}
+
+		inline void write_to( daw::io::WriteProxy &&writable ) {
+			write_to_impl( writable, nullptr );
+		}
+
+		inline void write_to( daw::io::WriteProxy &writable ) {
+			write_to_impl( writable, nullptr );
+		}
+
+		template<typename T>
+		inline void write_to( daw::io::WriteProxy &writable, T &state ) {
+			static_assert( not std::is_const_v<T>, "Only mutable state is supported" );
+			void *state_ptr = reinterpret_cast<void *>( std::addressof( state ) );
+			write_to_impl( writable, state_ptr );
+		}
+
+		template<typename T>
+		inline void write_to( daw::io::WriteProxy &&writable, T &state ) {
 			write_to( writable, state );
 		}
 
 		template<typename... ArgTypes, typename Callback>
-		void add_callback( daw::string_view name, Callback callback ) {
+		void add_callback( daw::string_view name, Callback &&callback ) {
 			m_callbacks.insert_or_assign( static_cast<std::string>( name ),
-			                              [callback = std::move( callback )]( daw::string_view str,
-			                                                                  daw::io::WriteProxy &writer,
-			                                                                  void *state ) mutable {
+			                              [callback = DAW_FWD( callback )]( daw::string_view str,
+			                                                                daw::io::WriteProxy &writer,
+			                                                                void *state ) mutable {
 				                              auto cb =
 				                                impl::make_callback<ArgTypes...>( callback, writer, state );
 				                              daw::apply_string<ArgTypes...>( cb, str, "," );
 			                              } );
 		}
 
+		template<typename StateType, typename... ArgTypes, typename Callback>
+		void add_stateful_callback( daw::string_view name, Callback &&callback ) {
+			static_assert( not std::is_const_v<std::remove_reference_t<StateType>>,
+			               "Only mutable state is supported" );
+			return add_callback<ArgTypes...>(
+			  name,
+			  impl::make_stateful_callback<StateType, ArgTypes...>( DAW_FWD( callback ) ) );
+		}
+
 		void process_timestamp_tag( string_view tag );
 	}; // class parse_template
+
 } // namespace daw
