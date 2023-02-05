@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include <daw/daw_parse_template.h>
+#include <daw/io/daw_write_proxy.h>
 
 #include <date/date.h>
 #include <date/tz.h>
@@ -54,11 +55,18 @@ int main( int argc, char const **argv ) {
 
 	p.add_callback<int, int, daw::escaped_string>(
 	  "dummy_text_cb2",
-	  []( int a, int b, std::string str ) {
+	  []( int a, int b, std::string str, daw::io::WriteProxy &writer ) {
 		  using std::to_string;
-		  using namespace std::string_literals;
-		  std::string msg = "From "s + to_string( a ) + " to "s + to_string( b ) + " we say "s + str;
-		  return msg;
+		  using namespace std::literals;
+		  auto ret = writer.write( std::initializer_list<daw::string_view>{ "From ",
+		                                                                    to_string( a ),
+		                                                                    " to ",
+		                                                                    to_string( b ),
+		                                                                    " we say ",
+		                                                                    str } );
+		  if( ret.status != daw::io::IOOpStatus::Ok ) {
+			  std::terminate( );
+		  }
 	  } );
 
 	p.add_callback<size_t, daw::escaped_string, daw::escaped_string>(

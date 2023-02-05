@@ -147,6 +147,42 @@ namespace daw {
 			write_to( writable, state );
 		}
 
+		template<typename Callback, typename... Args>
+		static constexpr void
+		write_to_output_nostate( Callback &callback, daw::io::WriteProxy &writer, Args &&...args ) {
+			auto wret = daw::io::IOOpResult{ };
+			if constexpr( daw::traits::is_string_view_like_v<std::invoke_result_t<Callback, Args...>> ) {
+				wret = writer.write( callback( DAW_FWD( args )... ) );
+			} else {
+				using daw::impl::to_string;
+				using std::to_string;
+				auto cb_res = callback( DAW_FWD( args )... );
+				wret = writer.write( to_string( cb_res ) );
+			}
+			if( DAW_UNLIKELY( wret.status != daw::io::IOOpStatus::Ok ) ) {
+				daw::exception::daw_throw( "Error writing to output" );
+			}
+		}
+		template<typename Callback, typename... Args>
+		static constexpr void write_to_output_state( Callback &callback,
+		                                             daw::io::WriteProxy &writer,
+		                                             void *state,
+		                                             Args &&...args ) {
+			auto wret = daw::io::IOOpResult{ };
+			if constexpr( daw::traits::is_string_view_like_v<
+			                std::invoke_result_t<Callback, Args..., void *>> ) {
+				wret = writer.write( callback( DAW_FWD( args )..., state ) );
+			} else {
+				using daw::impl::to_string;
+				using std::to_string;
+				auto cb_res = callback( DAW_FWD( args )..., state );
+				wret = writer.write( to_string( cb_res ) );
+			}
+			if( DAW_UNLIKELY( wret.status != daw::io::IOOpStatus::Ok ) ) {
+				daw::exception::daw_throw( "Error writing to output" );
+			}
+		}
+
 		template<typename... ArgTypes, typename Callback>
 		static constexpr auto
 		make_callback( Callback &callback, daw::io::WriteProxy &writer, void *state ) {
@@ -155,50 +191,38 @@ namespace daw {
 			                                  daw::io::WriteProxy &,
 			                                  void *> ) {
 				return [&, state]( impl::actual_type_t<ArgTypes>... args ) mutable {
-					return callback( std::move( args )..., writer, state );
+					(void)callback( DAW_FWD( args )..., writer, state );
 				};
 			} else if constexpr( std::is_invocable_v<Callback,
 			                                         impl::actual_type_t<ArgTypes>...,
 			                                         daw::io::WriteProxy &> ) {
 				return [&]( impl::actual_type_t<ArgTypes>... args ) mutable {
-					return callback( std::move( args )..., writer );
+					(void)callback( DAW_FWD( args )..., writer );
 				};
 			} else if constexpr( std::
 			                       is_invocable_v<Callback, impl::actual_type_t<ArgTypes>..., void *> ) {
 				return [&, state]( impl::actual_type_t<ArgTypes>... args ) mutable {
-					return callback( std::move( args )..., state );
+					write_to_output_state( callback, writer, state, DAW_FWD( args )... );
 				};
 			} else {
 				static_assert( std::is_invocable_v<Callback, impl::actual_type_t<ArgTypes>...>,
 				               "Unsupported callback" );
 				return [&]( impl::actual_type_t<ArgTypes>... args ) mutable {
-					return callback( std::move( args )... );
+					write_to_output_nostate( callback, writer, DAW_FWD( args )... );
 				};
 			}
 		}
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
-			m_callbacks.insert_or_assign(
-			  static_cast<std::string>( name ),
-			  [callback = std::move(
-			     callback )]( daw::string_view str, daw::io::WriteProxy &writer, void *state ) mutable {
-				  auto cb = make_callback<ArgTypes...>( callback, writer, state );
-				  if constexpr( daw::traits::is_string_view_like_v<
-				                  std::invoke_result<Callback, ArgTypes..., void *>> ) {
-					  auto cb_result = daw::apply_string<ArgTypes...>( cb, str, "," );
-					  if( auto ret = writer.write( cb_result ).status; ret != daw::io::IOOpStatus::Ok ) {
-						  daw::exception::daw_throw( "Error writing to output" );
-					  }
-				  } else {
-					  using daw::impl::to_string;
-					  using std::to_string;
-					  auto cb_result = to_string( daw::apply_string<ArgTypes...>( cb, str, "," ) );
-					  if( auto ret = writer.write( cb_result ).status; ret != daw::io::IOOpStatus::Ok ) {
-						  daw::exception::daw_throw( "Error writing to output" );
-					  }
-				  }
-			  } );
+			m_callbacks.insert_or_assign( static_cast<std::string>( name ),
+			                              [callback = std::move( callback )]( daw::string_view str,
+			                                                                  daw::io::WriteProxy &writer,
+			                                                                  void *state ) mutable {
+				                              auto cb =
+				                                make_callback<ArgTypes...>( callback, writer, state );
+				                              daw::apply_string<ArgTypes...>( cb, str, "," );
+			                              } );
 		}
 
 		void process_timestamp_tag( string_view tag );
