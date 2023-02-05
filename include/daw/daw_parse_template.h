@@ -22,8 +22,6 @@
 
 #pragma once
 
-#include "parse_template_impl/daw_function_traits.h"
-
 #include <daw/daw_container_algorithm.h>
 #include <daw/daw_move.h>
 #include <daw/daw_parse_to.h>
