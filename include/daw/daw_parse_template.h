@@ -71,21 +71,28 @@ namespace daw {
 		std::string to_string( std::string &&str ) noexcept;
 
 		template<typename ToStringFunc>
-		std::function<void( daw::io::WriteProxy & )> make_to_string_func( ToStringFunc func ) {
-			static_assert( std::is_invocable_v<ToStringFunc, daw::io::WriteProxy &>,
+		constexpr auto make_to_string_func( ToStringFunc func ) {
+			static_assert( std::is_invocable_v<ToStringFunc, daw::io::WriteProxy &> or
+			                 std::is_invocable_v<ToStringFunc, daw::io::WriteProxy &, void *>,
 			               "ToStringFunc must be callable with a WriteProxy argument func( writer )" );
-			return [func = std::move( func )]( daw::io::WriteProxy &writer ) { func( writer ); };
+			return [func = std::move( func )]( daw::io::WriteProxy &writer, void *state ) {
+				if constexpr( std::is_invocable_v<ToStringFunc, daw::io::WriteProxy &> ) {
+					func( writer );
+				} else {
+					func( writer, state );
+				}
+			};
 		}
 
 		class doc_parts {
-			std::function<void( daw::io::WriteProxy & )> m_to_string;
+			std::function<void( daw::io::WriteProxy &, void *state )> m_to_string;
 
 		public:
 			template<typename ToStringFunc>
 			doc_parts( ToStringFunc to_string_func )
 			  : m_to_string( make_to_string_func( std::move( to_string_func ) ) ) {}
 
-			void operator( )( daw::io::WriteProxy & ) const;
+			void operator( )( daw::io::WriteProxy &, void *state ) const;
 		};
 
 		template<typename Container>
@@ -114,7 +121,8 @@ namespace daw {
 
 	class parse_template {
 		std::vector<impl::doc_parts> m_doc_builder;
-		std::unordered_map<std::string, std::function<std::string( daw::string_view )>> m_callbacks;
+		std::unordered_map<std::string, std::function<std::string( daw::string_view, void * )>>
+		  m_callbacks;
 
 		void process_template( daw::string_view template_str );
 		void parse_tag( daw::string_view tag );
@@ -127,28 +135,40 @@ namespace daw {
 		explicit parse_template( daw::string_view template_string );
 
 		template<typename Writable>
-		void to_string( Writable &&wr ) {
-			return write_to( daw::io::WriteProxy( wr ) );
+		void to_string( Writable &&wr, void *state = nullptr ) {
+			return write_to( daw::io::WriteProxy( wr ), state );
 		}
 
 		std::string to_string( );
-		void write_to( daw::io::WriteProxy &writable );
+		void write_to( daw::io::WriteProxy &writable, void *state = nullptr );
 
-		inline void write_to( daw::io::WriteProxy &&writable ) {
-			write_to( writable );
+		inline void write_to( daw::io::WriteProxy &&writable, void *state = nullptr ) {
+			write_to( writable, state );
 		}
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
 			m_callbacks.insert_or_assign(
 			  static_cast<std::string>( name ),
-			  [callback = std::move( callback )]( daw::string_view str ) mutable {
-				  if constexpr( std::is_same_v<std::string, std::invoke_result<Callback, ArgTypes...>> ) {
-					  return daw::apply_string<ArgTypes...>( callback, str, "," );
+			  [callback = std::move( callback )]( daw::string_view str, void *state ) mutable {
+				  if constexpr( std::is_invocable_v<Callback, ArgTypes..., void *> ) {
+					  auto const cb = [&]( auto &&...args ) { return callback( DAW_FWD( args )..., state ); };
+					  if constexpr( std::is_same_v<std::string,
+					                               std::invoke_result<Callback, ArgTypes..., void *>> ) {
+						  return daw::apply_string<ArgTypes...>( cb, str, "," );
+					  } else {
+						  using daw::impl::to_string;
+						  using std::to_string;
+						  return to_string( daw::apply_string<ArgTypes...>( cb, str, "," ) );
+					  }
 				  } else {
-					  using daw::impl::to_string;
-					  using std::to_string;
-					  return to_string( daw::apply_string<ArgTypes...>( callback, str, "," ) );
+					  if constexpr( std::is_same_v<std::string, std::invoke_result<Callback, ArgTypes...>> ) {
+						  return daw::apply_string<ArgTypes...>( callback, str, "," );
+					  } else {
+						  using daw::impl::to_string;
+						  using std::to_string;
+						  return to_string( daw::apply_string<ArgTypes...>( callback, str, "," ) );
+					  }
 				  }
 			  } );
 		}

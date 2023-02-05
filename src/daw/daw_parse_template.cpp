@@ -159,10 +159,10 @@ namespace daw {
 
 		m_callbacks[static_cast<std::string>( callable_name )] = nullptr;
 
-		m_doc_builder.emplace_back( [callable_name, tag, this]( daw::io::WriteProxy &writer ) {
+		m_doc_builder.emplace_back( [callable_name, tag, this]( daw::io::WriteProxy &writer, void * state ) {
 			auto &cb = m_callbacks[static_cast<std::string>( callable_name )];
 			daw::exception::daw_throw_on_false( cb, "Attempt to call an undefined function" );
-			auto result = cb( tag );
+			auto result = cb( tag, state );
 			using result_t = DAW_TYPEOF( result );
 			auto write_result = [&] {
 				if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
@@ -261,9 +261,9 @@ namespace daw {
 		} );
 	}
 
-	void parse_template::write_to( daw::io::WriteProxy &writable ) {
+	void parse_template::write_to( daw::io::WriteProxy &writable, void * state ) {
 		for( auto const &part : m_doc_builder ) {
-			part( writable );
+			part( writable, state );
 		}
 	}
 
@@ -288,8 +288,8 @@ namespace daw {
 		return std::move( str );
 	}
 
-	void impl::doc_parts::operator( )( daw::io::WriteProxy &writer ) const {
-		m_to_string( writer );
+	void impl::doc_parts::operator( )( daw::io::WriteProxy &writer, void * state ) const {
+		m_to_string( writer, state );
 	}
 
 	namespace {
