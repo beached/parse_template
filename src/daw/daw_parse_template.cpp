@@ -256,9 +256,9 @@ namespace daw {
 		}
 	}
 
-	std::string parse_template::to_string( ) {
+	std::string parse_template::to_string( void *state ) {
 		auto result = std::string( );
-		write_to( daw::io::WriteProxy( result ) );
+		write_to( daw::io::WriteProxy( result ), state );
 		return result;
 	}
 

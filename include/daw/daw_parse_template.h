@@ -203,7 +203,7 @@ namespace daw {
 			return write_to( daw::io::WriteProxy( wr ), state );
 		}
 
-		std::string to_string( );
+		std::string to_string( void * state = nullptr );
 		void write_to( daw::io::WriteProxy &writable, void *state = nullptr );
 
 		inline void write_to( daw::io::WriteProxy &&writable, void *state = nullptr ) {
