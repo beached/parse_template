@@ -35,7 +35,7 @@ tmp.add_callback<int,int,bool>( "callback_name", []( int a, int b, bool c ) {
 } );
 ```
 
-The previous example adds a callback that takes the arguments of int, int, and bool and returns an int. The result must be a string or have a ``` to_string ``` overload. To use the example in a template you would call it like the following:
+The previous example adds a callback that takes the arguments of int, int, and bool and returns an int. The result must be a string, have a ``` to_string ``` overload, or take a `daw::io::WriteProxy &` param. To use the example in a template you would call it like the following:
 
 ``` html
 <%call args="callback_name,5,5,true"%><br>
@@ -45,7 +45,7 @@ The previous example adds a callback that takes the arguments of int, int, and b
 One can output to any Writable type, see [daw-read-write](https://github.com/beached/daw_read_write), such as strings, streams, and FILE *.
 
 ```cpp
-tmp.to_string( std::cout );
+tmp.write_to( std::cout );
 ```
 
 If the text output was html, the output would be
@@ -65,7 +65,7 @@ For example
 
 ```cpp
 tmp.add_callback<daw::escaped_string, daw::escaped_string>( []( std::string a, std::string b, daw::io::WriteProxy & writer ) {
-    writer.write( a, ":", b );
+  writer.write( {a, ":", b} );
 )
 ```
 

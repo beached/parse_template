@@ -58,12 +58,8 @@ int main( int argc, char const **argv ) {
 	  []( int a, int b, std::string str, daw::io::WriteProxy &writer ) {
 		  using std::to_string;
 		  using namespace std::literals;
-		  auto ret = writer.write( std::initializer_list<daw::string_view>{ "From ",
-		                                                                    to_string( a ),
-		                                                                    " to ",
-		                                                                    to_string( b ),
-		                                                                    " we say ",
-		                                                                    str } );
+		  auto ret =
+		    writer.write( { "From ", to_string( a ), " to ", to_string( b ), " we say ", str } );
 		  if( ret.status != daw::io::IOOpStatus::Ok ) {
 			  std::terminate( );
 		  }
@@ -90,8 +86,8 @@ int main( int argc, char const **argv ) {
 		return count + ( v ? *v : 0 );
 	} );
 
-	p.to_string( std::cout, &x );
-	p.to_string( std::cout );
+	p.write_to( std::cout, &x );
+	p.write_to( std::cout );
 
 	return EXIT_SUCCESS;
 }

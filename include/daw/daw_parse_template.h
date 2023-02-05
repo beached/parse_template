@@ -115,57 +115,11 @@ namespace daw {
 		template<typename StringRange>
 		constexpr size_t value_size_v = value_size_test<StringRange>( );
 
-	} // namespace impl
-
-	class parse_template {
-		std::vector<impl::doc_parts> m_doc_builder;
-		std::unordered_map<std::string,
-		                   std::function<void( daw::string_view, daw::io::WriteProxy &, void * )>>
-		  m_callbacks;
-
-		void process_template( daw::string_view template_str );
-		void parse_tag( daw::string_view tag );
-		void process_call_tag( daw::string_view tag );
-		void process_date_tag( daw::string_view tag );
-		void process_time_tag( daw::string_view tag );
-		void process_text( string_view str );
-
-	public:
-		explicit parse_template( daw::string_view template_string );
-
-		template<typename Writable>
-		void to_string( Writable &&wr, void *state = nullptr ) {
-			return write_to( daw::io::WriteProxy( wr ), state );
-		}
-
-		std::string to_string( );
-		void write_to( daw::io::WriteProxy &writable, void *state = nullptr );
-
-		inline void write_to( daw::io::WriteProxy &&writable, void *state = nullptr ) {
-			write_to( writable, state );
-		}
-
 		template<typename Callback, typename... Args>
-		static constexpr void
-		write_to_output_nostate( Callback &callback, daw::io::WriteProxy &writer, Args &&...args ) {
-			auto wret = daw::io::IOOpResult{ };
-			if constexpr( daw::traits::is_string_view_like_v<std::invoke_result_t<Callback, Args...>> ) {
-				wret = writer.write( callback( DAW_FWD( args )... ) );
-			} else {
-				using daw::impl::to_string;
-				using std::to_string;
-				auto cb_res = callback( DAW_FWD( args )... );
-				wret = writer.write( to_string( cb_res ) );
-			}
-			if( DAW_UNLIKELY( wret.status != daw::io::IOOpStatus::Ok ) ) {
-				daw::exception::daw_throw( "Error writing to output" );
-			}
-		}
-		template<typename Callback, typename... Args>
-		static constexpr void write_to_output_state( Callback &callback,
-		                                             daw::io::WriteProxy &writer,
-		                                             void *state,
-		                                             Args &&...args ) {
+		constexpr void write_to_output_state( Callback &callback,
+		                                      daw::io::WriteProxy &writer,
+		                                      void *state,
+		                                      Args &&...args ) {
 			auto wret = daw::io::IOOpResult{ };
 			if constexpr( daw::traits::is_string_view_like_v<
 			                std::invoke_result_t<Callback, Args..., void *>> ) {
@@ -181,9 +135,25 @@ namespace daw {
 			}
 		}
 
+		template<typename Callback, typename... Args>
+		constexpr void
+		write_to_output_nostate( Callback &callback, daw::io::WriteProxy &writer, Args &&...args ) {
+			auto wret = daw::io::IOOpResult{ };
+			if constexpr( daw::traits::is_string_view_like_v<std::invoke_result_t<Callback, Args...>> ) {
+				wret = writer.write( callback( DAW_FWD( args )... ) );
+			} else {
+				using daw::impl::to_string;
+				using std::to_string;
+				auto cb_res = callback( DAW_FWD( args )... );
+				wret = writer.write( to_string( cb_res ) );
+			}
+			if( DAW_UNLIKELY( wret.status != daw::io::IOOpStatus::Ok ) ) {
+				daw::exception::daw_throw( "Error writing to output" );
+			}
+		}
+
 		template<typename... ArgTypes, typename Callback>
-		static constexpr auto
-		make_callback( Callback &callback, daw::io::WriteProxy &writer, void *state ) {
+		constexpr auto make_callback( Callback &callback, daw::io::WriteProxy &writer, void *state ) {
 			if constexpr( std::is_invocable_v<Callback,
 			                                  impl::actual_type_t<ArgTypes>...,
 			                                  daw::io::WriteProxy &,
@@ -210,6 +180,35 @@ namespace daw {
 				};
 			}
 		}
+	} // namespace impl
+
+	class parse_template {
+		std::vector<impl::doc_parts> m_doc_builder;
+		std::unordered_map<std::string,
+		                   std::function<void( daw::string_view, daw::io::WriteProxy &, void * )>>
+		  m_callbacks;
+
+		void process_template( daw::string_view template_str );
+		void parse_tag( daw::string_view tag );
+		void process_call_tag( daw::string_view tag );
+		void process_date_tag( daw::string_view tag );
+		void process_time_tag( daw::string_view tag );
+		void process_text( string_view str );
+
+	public:
+		explicit parse_template( daw::string_view template_string );
+
+		template<typename Writable>
+		void write_to( Writable &&wr, void *state = nullptr ) {
+			return write_to( daw::io::WriteProxy( wr ), state );
+		}
+
+		std::string to_string( );
+		void write_to( daw::io::WriteProxy &writable, void *state = nullptr );
+
+		inline void write_to( daw::io::WriteProxy &&writable, void *state = nullptr ) {
+			write_to( writable, state );
+		}
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
@@ -218,7 +217,7 @@ namespace daw {
 			                                                                  daw::io::WriteProxy &writer,
 			                                                                  void *state ) mutable {
 				                              auto cb =
-				                                make_callback<ArgTypes...>( callback, writer, state );
+				                                impl::make_callback<ArgTypes...>( callback, writer, state );
 				                              daw::apply_string<ArgTypes...>( cb, str, "," );
 			                              } );
 		}
