@@ -22,11 +22,13 @@
 
 #pragma once
 
+#include <daw/daw_arith_traits.h>
 #include <daw/daw_container_algorithm.h>
 #include <daw/daw_move.h>
 #include <daw/daw_parse_to.h>
 #include <daw/daw_string_view.h>
 #include <daw/daw_traits.h>
+#include <daw/io/daw_type_writers.h>
 #include <daw/io/daw_write_proxy.h>
 #include <daw/iterator/daw_output_stream_iterator.h>
 
@@ -121,9 +123,11 @@ namespace daw {
 		                                      void *state,
 		                                      Args &&...args ) {
 			auto wret = daw::io::IOOpResult{ };
-			if constexpr( daw::traits::is_string_view_like_v<
-			                std::invoke_result_t<Callback, Args..., void *>> ) {
+			using result_t = std::invoke_result_t<Callback, Args..., void *>;
+			if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
 				wret = writer.write( callback( DAW_FWD( args )..., state ) );
+			} else if constexpr( daw::io::type_writer::has_type_writer_v<result_t> ) {
+				wret = daw::io::type_writer::type_writer( writer, callback( DAW_FWD( args )..., state ) );
 			} else {
 				using daw::impl::to_string;
 				using std::to_string;
@@ -139,8 +143,11 @@ namespace daw {
 		constexpr void
 		write_to_output_nostate( Callback &callback, daw::io::WriteProxy &writer, Args &&...args ) {
 			auto wret = daw::io::IOOpResult{ };
-			if constexpr( daw::traits::is_string_view_like_v<std::invoke_result_t<Callback, Args...>> ) {
+			using result_t = std::invoke_result_t<Callback, Args...>;
+			if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
 				wret = writer.write( callback( DAW_FWD( args )... ) );
+			} else if constexpr( daw::io::type_writer::has_type_writer_v<result_t> ) {
+				wret = daw::io::type_writer::type_writer( writer, callback( DAW_FWD( args )... ) );
 			} else {
 				using daw::impl::to_string;
 				using std::to_string;
