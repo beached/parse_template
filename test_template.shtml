@@ -1,6 +1,6 @@
-<html>
+<html lang="en">
 <head>
-<title>Test HTML</title>
+	<title>Test HTML</title>
 </head>
 <body>
 <p>
@@ -18,29 +18,38 @@
 	The current time for Etc/GMT-12 is <%time args="Etc/GMT-12"%><br>
 </p>
 <p>
-The current local timestamp is <%timestamp%><br>
-The current local timestamp is <%timestamp args="%T"%><br>
-The current timestamp in New York is <%timestamp args="%T,America/New_York"%><br>
-The current timestamp in Berlin is <%timestamp args="%T,Europe/Berlin"%><br>
-The current timestamp in Berlin is <%timestamp args=",Europe/Berlin"%><br>
-The current timestamp in the South Pole is <%timestamp args=",Antarctica/South_Pole"%><br>
-The current timestamp for Etc/GMT-12 is <%timestamp args=",Etc/GMT-12"%><br>
-The current local timestamp is <%timestamp args=","%><br>
-The current local timestamp is <%timestamp args="%Z,"%><br>
+	The current local timestamp is <%timestamp%><br>
+	The current local timestamp is <%timestamp args="%T"%><br>
+	The current timestamp in New York is <%timestamp args="%T,America/New_York"%><br>
+	The current timestamp in Berlin is <%timestamp args="%T,Europe/Berlin"%><br>
+	The current timestamp in Berlin is <%timestamp args=",Europe/Berlin"%><br>
+	The current timestamp in the South Pole is <%timestamp args=",Antarctica/South_Pole"%><br>
+	The current timestamp for Etc/GMT-12 is <%timestamp args=",Etc/GMT-12"%><br>
+	The current local timestamp is <%timestamp args=","%><br>
+	The current local timestamp is <%timestamp args="%Z,"%><br>
 </p>
 <p>
-Some dummy test<pre><%call args="dummy_text_cb"%></pre>
+	Some dummy test
+<pre><%call args="dummy_text_cb"%></pre>
 </p>
 <p>
-    Some more dummy text<pre><%call args="dummy_text_cb2,1,3,\"hello\""%></pre>
+	Some more dummy text
+<pre><%call args="dummy_text_cb2,1,3,\"hello\""%></pre>
 </p>
 <ol>
-	<%call args="repeat_test,5,\"<li>\",\"</li>\""%>
+	<%call args="repeat_test,5,\"
+	<li>\",\"</li>
+	\""%>
 </ol>
 <ol>
-	Stateful count: <pre><%call args="stateful_test"%></pre>
-	Stateful count: <pre><%call args="stateful_test"%></pre>
-	Stateful count: <pre><%call args="stateful_test"%></pre>
+	<li>
+	Stateful count:
+	<pre><%call args="stateful_test"%></pre>
+	Stateful count:
+	<pre><%call args="stateful_test"%></pre>
+	Stateful count:
+	<pre><%call args="stateful_test"%></pre>
+	</li>
 </ol>
 </body>
 </html>
