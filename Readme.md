@@ -41,6 +41,12 @@ The previous example adds a callback that takes the arguments of int, int, and b
 <%call args="callback_name,5,5,false"%>
 ```
 
+One can output to any Writable type, see [daw-read-write](https://github.com/beached/daw_read_write), such as strings, streams, and FILE *.
+
+```cpp
+tmp.to_string( std::cout );
+```
+
 If the text output was html, the output would be
 
 ```
