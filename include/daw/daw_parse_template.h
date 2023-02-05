@@ -71,25 +71,21 @@ namespace daw {
 		std::string to_string( std::string &&str ) noexcept;
 
 		template<typename ToStringFunc>
-		std::function<std::string( )> make_to_string_func( ToStringFunc func ) {
-			static_assert( std::is_invocable_v<ToStringFunc>,
-			               "ToStringFunc must be callable without arguments func( )" );
-			return [func = std::move( func )]( ) {
-				using daw::impl::to_string;
-				using std::to_string;
-				return to_string( func( ) );
-			};
+		std::function<void( daw::io::WriteProxy & )> make_to_string_func( ToStringFunc func ) {
+			static_assert( std::is_invocable_v<ToStringFunc, daw::io::WriteProxy &>,
+			               "ToStringFunc must be callable with a WriteProxy argument func( writer )" );
+			return [func = std::move( func )]( daw::io::WriteProxy &writer ) { func( writer ); };
 		}
 
 		class doc_parts {
-			std::function<std::string( )> m_to_string;
+			std::function<void( daw::io::WriteProxy & )> m_to_string;
 
 		public:
 			template<typename ToStringFunc>
 			doc_parts( ToStringFunc to_string_func )
 			  : m_to_string( make_to_string_func( std::move( to_string_func ) ) ) {}
 
-			std::string operator( )( ) const;
+			void operator( )( daw::io::WriteProxy & ) const;
 		};
 
 		template<typename Container>
@@ -136,7 +132,11 @@ namespace daw {
 		}
 
 		std::string to_string( );
-		void write_to( daw::io::WriteProxy writable );
+		void write_to( daw::io::WriteProxy &writable );
+
+		inline void write_to( daw::io::WriteProxy &&writable ) {
+			write_to( writable );
+		}
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {

@@ -67,12 +67,12 @@ int main( int argc, char const **argv ) {
 		  auto result = std::string( );
 
 		  for( size_t n = 0; n < how_many; ++n ) {
-			  result += prefix + static_cast<char>( '0' + n ) + suffix;
+			  result += prefix + std::to_string( n ) + suffix;
 		  }
 		  return result;
 	  } );
 
-	p.add_callback( "stateful_test", [count = 0]( ) mutable {
+	p.add_callback( "stateful_test", [count = 0U]( ) mutable {
 		++count;
 		return count;
 	} );

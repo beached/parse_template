@@ -37,12 +37,8 @@ namespace daw {
 			explicit constexpr raw_text_func( daw::string_view sv )
 			  : str( sv ) {}
 
-			std::string operator( )( ) const noexcept {
-				return static_cast<std::string>( str );
-			}
-
-			void operator( )( daw::io::WriteProxy prox ) const {
-				auto ret = prox.write( str );
+			void operator( )( daw::io::WriteProxy &writer ) const {
+				auto ret = writer.write( str );
 				if( ret.status != io::IOOpStatus::Ok ) {
 					daw::exception::daw_throw( "Error writing to output" );
 				}
@@ -163,10 +159,23 @@ namespace daw {
 
 		m_callbacks[static_cast<std::string>( callable_name )] = nullptr;
 
-		m_doc_builder.emplace_back( [callable_name, tag, this]( ) {
+		m_doc_builder.emplace_back( [callable_name, tag, this]( daw::io::WriteProxy &writer ) {
 			auto &cb = m_callbacks[static_cast<std::string>( callable_name )];
 			daw::exception::daw_throw_on_false( cb, "Attempt to call an undefined function" );
-			return cb( tag );
+			auto result = cb( tag );
+			using result_t = DAW_TYPEOF( result );
+			auto write_result = [&] {
+				if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
+					return writer.write( result );
+				} else {
+					using daw::impl::to_string;
+					using std::to_string;
+					return writer.write( to_string( result ) );
+				}
+			}( );
+			if( write_result.status != io::IOOpStatus::Ok ) {
+				daw::exception::daw_throw( "Error writing to output" );
+			}
 		} );
 	}
 
@@ -180,13 +189,16 @@ namespace daw {
 			return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
 		}( );
 
-		m_doc_builder.emplace_back( [tz]( ) {
+		m_doc_builder.emplace_back( [tz]( daw::io::WriteProxy &writer ) {
 			using namespace date;
 			using namespace std::chrono;
 			std::stringstream ss{ };
 			auto const current_time = date::make_zoned( tz, std::chrono::system_clock::now( ) );
 			ss << date::format( "%Y-%m-%d", current_time );
-			return ss.str( );
+			auto ret = writer.write( ss.str( ) );
+			if( ret.status != io::IOOpStatus::Ok ) {
+				daw::exception::daw_throw( "Error writing to output" );
+			}
 		} );
 	}
 
@@ -199,14 +211,17 @@ namespace daw {
 			}
 			return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
 		}( );
-		m_doc_builder.emplace_back( [tz]( ) {
+		m_doc_builder.emplace_back( [tz]( daw::io::WriteProxy &writer ) {
 			using namespace date;
 			using namespace std::chrono;
 			std::stringstream ss{ };
 			auto const current_time =
 			  date::make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
 			ss << date::format( "%T", current_time );
-			return ss.str( );
+			auto ret = writer.write( ss.str( ) );
+			if( ret.status != io::IOOpStatus::Ok ) {
+				daw::exception::daw_throw( "Error writing to output" );
+			}
 		} );
 	}
 
@@ -229,7 +244,7 @@ namespace daw {
 			return date::locate_zone( static_cast<std::string>( args[1] ).c_str( ) );
 		}( );
 
-		m_doc_builder.emplace_back( [ts_fmt, tz]( ) {
+		m_doc_builder.emplace_back( [ts_fmt, tz]( daw::io::WriteProxy &writer ) {
 			using namespace date;
 			using namespace std::chrono;
 
@@ -238,15 +253,17 @@ namespace daw {
 			auto current_time = make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
 			ss << format( ts_fmt, current_time );
 
-			return ss.str( );
+			auto ret = writer.write( ss.str( ) );
+
+			if( ret.status != io::IOOpStatus::Ok ) {
+				daw::exception::daw_throw( "Error writing to output" );
+			}
 		} );
 	}
 
-	void parse_template::write_to( daw::io::WriteProxy writable ) {
+	void parse_template::write_to( daw::io::WriteProxy &writable ) {
 		for( auto const &part : m_doc_builder ) {
-			if( auto result = writable.write( part( ) ); result.status != io::IOOpStatus::Ok ) {
-				daw::exception::daw_throw( "Error writing to output" );
-			}
+			part( writable );
 		}
 	}
 
@@ -271,8 +288,8 @@ namespace daw {
 		return std::move( str );
 	}
 
-	std::string impl::doc_parts::operator( )( ) const {
-		return m_to_string( );
+	void impl::doc_parts::operator( )( daw::io::WriteProxy &writer ) const {
+		m_to_string( writer );
 	}
 
 	namespace {
