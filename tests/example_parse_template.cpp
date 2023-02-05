@@ -78,8 +78,8 @@ int main( int argc, char const **argv ) {
 
 	int x = 1;
 	p.add_stateful_callback<int>( "stateful_test", [count = 0]( int &v ) mutable {
-		++count;
-		return count * v;
+		count += v;
+		return count;
 	} );
 
 	p.write_to( std::cout, x );
