@@ -121,7 +121,8 @@ namespace daw {
 
 	class parse_template {
 		std::vector<impl::doc_parts> m_doc_builder;
-		std::unordered_map<std::string, std::function<std::string( daw::string_view, void * )>>
+		std::unordered_map<std::string,
+		                   std::function<void( daw::string_view, daw::io::WriteProxy &, void * )>>
 		  m_callbacks;
 
 		void process_template( daw::string_view template_str );
@@ -147,27 +148,54 @@ namespace daw {
 		}
 
 		template<typename... ArgTypes, typename Callback>
+		static constexpr auto
+		make_callback( Callback &callback, daw::io::WriteProxy &writer, void *state ) {
+			if constexpr( std::is_invocable_v<Callback,
+			                                  impl::actual_type_t<ArgTypes>...,
+			                                  daw::io::WriteProxy &,
+			                                  void *> ) {
+				return [&, state]( impl::actual_type_t<ArgTypes>... args ) mutable {
+					return callback( std::move( args )..., writer, state );
+				};
+			} else if constexpr( std::is_invocable_v<Callback,
+			                                         impl::actual_type_t<ArgTypes>...,
+			                                         daw::io::WriteProxy &> ) {
+				return [&]( impl::actual_type_t<ArgTypes>... args ) mutable {
+					return callback( std::move( args )..., writer );
+				};
+			} else if constexpr( std::
+			                       is_invocable_v<Callback, impl::actual_type_t<ArgTypes>..., void *> ) {
+				return [&, state]( impl::actual_type_t<ArgTypes>... args ) mutable {
+					return callback( std::move( args )..., state );
+				};
+			} else {
+				static_assert( std::is_invocable_v<Callback, impl::actual_type_t<ArgTypes>...>,
+				               "Unsupported callback" );
+				return [&]( impl::actual_type_t<ArgTypes>... args ) mutable {
+					return callback( std::move( args )... );
+				};
+			}
+		}
+
+		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback callback ) {
 			m_callbacks.insert_or_assign(
 			  static_cast<std::string>( name ),
-			  [callback = std::move( callback )]( daw::string_view str, void *state ) mutable {
-				  if constexpr( std::is_invocable_v<Callback, ArgTypes..., void *> ) {
-					  auto const cb = [&]( auto &&...args ) { return callback( DAW_FWD( args )..., state ); };
-					  if constexpr( std::is_same_v<std::string,
-					                               std::invoke_result<Callback, ArgTypes..., void *>> ) {
-						  return daw::apply_string<ArgTypes...>( cb, str, "," );
-					  } else {
-						  using daw::impl::to_string;
-						  using std::to_string;
-						  return to_string( daw::apply_string<ArgTypes...>( cb, str, "," ) );
+			  [callback = std::move(
+			     callback )]( daw::string_view str, daw::io::WriteProxy &writer, void *state ) mutable {
+				  auto cb = make_callback<ArgTypes...>( callback, writer, state );
+				  if constexpr( daw::traits::is_string_view_like_v<
+				                  std::invoke_result<Callback, ArgTypes..., void *>> ) {
+					  auto cb_result = daw::apply_string<ArgTypes...>( cb, str, "," );
+					  if( auto ret = writer.write( cb_result ).status; ret != daw::io::IOOpStatus::Ok ) {
+						  daw::exception::daw_throw( "Error writing to output" );
 					  }
 				  } else {
-					  if constexpr( std::is_same_v<std::string, std::invoke_result<Callback, ArgTypes...>> ) {
-						  return daw::apply_string<ArgTypes...>( callback, str, "," );
-					  } else {
-						  using daw::impl::to_string;
-						  using std::to_string;
-						  return to_string( daw::apply_string<ArgTypes...>( callback, str, "," ) );
+					  using daw::impl::to_string;
+					  using std::to_string;
+					  auto cb_result = to_string( daw::apply_string<ArgTypes...>( cb, str, "," ) );
+					  if( auto ret = writer.write( cb_result ).status; ret != daw::io::IOOpStatus::Ok ) {
+						  daw::exception::daw_throw( "Error writing to output" );
 					  }
 				  }
 			  } );

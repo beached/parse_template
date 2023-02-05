@@ -22,7 +22,6 @@
 
 #include "daw/daw_parse_template.h"
 
-#include <daw/daw_move.h>
 #include <daw/daw_string_view.h>
 #include <daw/io/daw_write_proxy.h>
 
@@ -104,7 +103,7 @@ namespace daw {
 					in_slash = false;
 				}
 			}
-			return str.npos;
+			return daw::string_view::npos;
 		}
 
 		constexpr daw::string_view find_args( daw::string_view tag ) {
@@ -114,7 +113,7 @@ namespace daw {
 				return tag;
 			}
 			auto end_quote_pos = find_quote( tag );
-			daw::exception::daw_throw_on_true( end_quote_pos == tag.npos,
+			daw::exception::daw_throw_on_true( end_quote_pos == daw::string_view::npos,
 			                                   "Could not find end of call args" );
 			tag.resize( end_quote_pos );
 			return tag;
@@ -159,24 +158,14 @@ namespace daw {
 
 		m_callbacks[static_cast<std::string>( callable_name )] = nullptr;
 
-		m_doc_builder.emplace_back( [callable_name, tag, this]( daw::io::WriteProxy &writer, void * state ) {
-			auto &cb = m_callbacks[static_cast<std::string>( callable_name )];
-			daw::exception::daw_throw_on_false( cb, "Attempt to call an undefined function" );
-			auto result = cb( tag, state );
-			using result_t = DAW_TYPEOF( result );
-			auto write_result = [&] {
-				if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
-					return writer.write( result );
-				} else {
-					using daw::impl::to_string;
-					using std::to_string;
-					return writer.write( to_string( result ) );
-				}
-			}( );
-			if( write_result.status != io::IOOpStatus::Ok ) {
-				daw::exception::daw_throw( "Error writing to output" );
-			}
-		} );
+		m_doc_builder.emplace_back(
+		  [callable_name, tag, this]( daw::io::WriteProxy &writer, void *state ) {
+			  auto pos = m_callbacks.find( static_cast<std::string>( callable_name ) );
+			  daw::exception::daw_throw_on_true( pos == m_callbacks.end( ),
+			                                     "Attempt to call an undefined function" );
+			  auto &cb = pos->second;
+			  cb( tag, writer, state );
+		  } );
 	}
 
 	void parse_template::process_date_tag( daw::string_view str ) {
@@ -261,7 +250,7 @@ namespace daw {
 		} );
 	}
 
-	void parse_template::write_to( daw::io::WriteProxy &writable, void * state ) {
+	void parse_template::write_to( daw::io::WriteProxy &writable, void *state ) {
 		for( auto const &part : m_doc_builder ) {
 			part( writable, state );
 		}
@@ -288,7 +277,7 @@ namespace daw {
 		return std::move( str );
 	}
 
-	void impl::doc_parts::operator( )( daw::io::WriteProxy &writer, void * state ) const {
+	void impl::doc_parts::operator( )( daw::io::WriteProxy &writer, void *state ) const {
 		m_to_string( writer, state );
 	}
 
