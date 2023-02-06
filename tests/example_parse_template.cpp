@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 #include <daw/daw_parse_template.h>
-#include <daw/io/daw_write_proxy.h>
+#include <daw/io/daw_read_write.h>
 
 #include <date/date.h>
 #include <date/tz.h>
@@ -30,6 +30,9 @@
 
 #include <cstdlib>
 #include <ctime>
+#if defined( DAW_HAS_FMTLIB )
+#include <fmt/format.h>
+#endif
 #include <iostream>
 
 int main( int argc, char const **argv ) {
@@ -56,6 +59,11 @@ int main( int argc, char const **argv ) {
 	p.add_callback<int, int, daw::escaped_string>(
 	  "dummy_text_cb2",
 	  []( int a, int b, std::string str, daw::io::WriteProxy &writer ) {
+#if defined( DAW_HAS_FMTLIB )
+		  auto it = daw::io::write_iterator( writer );
+		  fmt::format_to( it, "From {} to {} we say {}", a, b, str );
+		  		  using std::to_string;
+#else
 		  using std::to_string;
 		  using namespace std::literals;
 		  auto ret =
@@ -63,6 +71,7 @@ int main( int argc, char const **argv ) {
 		  if( ret.status != daw::io::IOOpStatus::Ok ) {
 			  std::terminate( );
 		  }
+#endif
 	  } );
 
 	p.add_callback<size_t, daw::escaped_string, daw::escaped_string>(
