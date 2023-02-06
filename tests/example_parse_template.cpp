@@ -62,7 +62,6 @@ int main( int argc, char const **argv ) {
 #if defined( DAW_HAS_FMTLIB )
 		  auto it = daw::io::write_iterator( writer );
 		  fmt::format_to( it, "From {} to {} we say {}", a, b, str );
-		  		  using std::to_string;
 #else
 		  using std::to_string;
 		  using namespace std::literals;
