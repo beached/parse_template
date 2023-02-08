@@ -46,9 +46,7 @@ namespace daw::parse_template_impl {
 		}
 		return static_cast<std::string>( str );
 	}
-} // namespace daw::parse_template_impl
 
-namespace daw {
 	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> ) {
 		static constexpr auto unescape = []( char c ) {
 			switch( c ) {
@@ -85,4 +83,4 @@ namespace daw {
 		}
 		return parse_template_impl::trim_quotes( result );
 	}
-} // namespace daw
+} // namespace daw::parse_template_impl

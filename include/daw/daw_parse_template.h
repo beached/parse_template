@@ -60,9 +60,8 @@ namespace daw {
 		explicit escaped_string( ) = default;
 	};
 
-	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> );
-
 	namespace parse_template_impl {
+		std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> );
 		template<typename T>
 		using detect_sv_conv = decltype( daw::basic_string_view( std::data( std::declval<T &>( ) ),
 		                                                         std::size( std::declval<T &>( ) ) ) );
@@ -317,7 +316,7 @@ namespace daw {
 			[[noreturn]] void operator( )( parse_template_error_types type,
 			                               daw::string_view /*data*/,
 			                               daw::string_view error_message ) const {
-				if( std::uncaught_exceptions() > 0 ) {
+				if( std::uncaught_exceptions( ) > 0 ) {
 					throw;
 				}
 				throw std::runtime_error( static_cast<std::string>( error_message ) );
@@ -501,6 +500,20 @@ namespace daw {
 			write_to( writable, state );
 		}
 
+		template<typename... Args, typename Callback, typename Splitter>
+		constexpr decltype( auto )
+		apply_from_string( Callback &cb, daw::string_view sv, Splitter &&sp ) {
+			auto parse_value = [&]( daw::string_view &sv, auto Tag ) {
+				auto part = sv.pop_front_until( sp );
+				using daw::parser::converters::parse_to_value;
+				using parse_template_impl::parse_to_value;
+				return parse_to_value( part, Tag );
+			};
+			using tp_t = DAW_TYPEOF( std::forward_as_tuple( parse_value( sv, daw::tag<Args> )... ) );
+			// Order matters here, must be left to right as the string_view is state
+			return std::apply( cb, tp_t{ parse_value( sv, daw::tag<Args> )... } );
+		}
+
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback &&callback ) {
 			m_callbacks.insert_or_assign(
@@ -511,7 +524,7 @@ namespace daw {
 				  auto cb =
 				    parse_template_impl::make_callback<ArgTypes...>( m_on_error, callback, writer, state );
 				  try {
-					  daw::apply_string<ArgTypes...>( cb, str, "," );
+					  apply_from_string<ArgTypes...>( cb, str, ',' );
 				  } catch( std::exception const &ex ) {
 					  m_on_error( parse_template_error_types::parser_exception, str, ex.what( ) );
 				  } catch( ... ) {
