@@ -137,20 +137,18 @@ namespace daw::parse_template_impl {
 namespace daw {
 	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> ) {
 		auto result = std::string( );
-		bool in_escape = false;
+		result.reserve( str.size( ) );
 
 		while( not str.empty( ) ) {
-			auto const item = str.pop_front( );
-			if( in_escape ) {
-				in_escape = false;
-				result += parse_template_impl::unescape( item );
-			} else if( item == '\\' ) {
-				in_escape = true;
-			} else {
-				result += item;
+			result.append( static_cast<std::string_view>( str.pop_front_until( '\\', nodiscard ) ) );
+			if( str.starts_with( '\\' ) ) {
+				str.remove_prefix( );
+				if( str.empty( ) ) {
+					throw std::runtime_error( "Invalid escape sequence" );
+				}
+				result += parse_template_impl::unescape( str.pop_front( ) );
 			}
 		}
 		return parse_template_impl::trim_quotes( result );
 	}
-
 } // namespace daw
