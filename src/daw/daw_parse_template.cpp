@@ -104,27 +104,6 @@ namespace daw::parse_template_impl {
 		m_to_string( writer, state );
 	}
 
-	constexpr char unescape( char c ) noexcept {
-		switch( c ) {
-		case 'a':
-			return '\a';
-		case 'b':
-			return '\b';
-		case 'f':
-			return '\f';
-		case 'n':
-			return '\n';
-		case 'r':
-			return '\r';
-		case 't':
-			return '\t';
-		case 'v':
-			return '\v';
-		default:
-			return c;
-		}
-	}
-
 	std::string trim_quotes( daw::string_view str ) {
 		if( str.size( ) >= 2 and str.front( ) == '"' and str.back( ) == '"' ) {
 			str.remove_prefix( );
@@ -136,9 +115,29 @@ namespace daw::parse_template_impl {
 
 namespace daw {
 	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> ) {
+		static constexpr auto unescape = []( char c ) {
+			switch( c ) {
+			case 'a':
+				return '\a';
+			case 'b':
+				return '\b';
+			case 'f':
+				return '\f';
+			case 'n':
+				return '\n';
+			case 'r':
+				return '\r';
+			case 't':
+				return '\t';
+			case 'v':
+				return '\v';
+			default:
+				return c;
+			}
+		};
+
 		auto result = std::string( );
 		result.reserve( str.size( ) );
-
 		while( not str.empty( ) ) {
 			result.append( static_cast<std::string_view>( str.pop_front_until( '\\', nodiscard ) ) );
 			if( str.starts_with( '\\' ) ) {
@@ -146,7 +145,7 @@ namespace daw {
 				if( str.empty( ) ) {
 					throw std::runtime_error( "Invalid escape sequence" );
 				}
-				result += parse_template_impl::unescape( str.pop_front( ) );
+				result += unescape( str.pop_front( ) );
 			}
 		}
 		return parse_template_impl::trim_quotes( result );
