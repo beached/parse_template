@@ -47,9 +47,12 @@ namespace daw {
 		empty_tag,
 		eof,
 		io_error,
+		missing_dbl_quote,
 		missing_tag,
+		parser_exception,
 		precondition_violation,
 		unexpected_arg_count,
+		unexpected_dbl_quote,
 		unknown_function,
 		unknown_tag,
 	};
@@ -68,7 +71,40 @@ namespace daw {
 		using StringViewConvertible =
 		  std::enable_if_t<daw::is_detected_v<detect_sv_conv, T>, std::nullptr_t>;
 
-		std::vector<daw::string_view> find_split_args( daw::string_view tag );
+		template<typename ErrorHandler>
+		std::vector<daw::string_view> find_split_args( ErrorHandler const &on_error,
+		                                               daw::string_view tag ) {
+			tag = find_args( on_error, tag );
+			std::vector<daw::string_view> results{ };
+			bool in_quote = false;
+			bool is_escaped = false;
+			size_t last_pos = 0;
+			for( size_t n = 0; n < tag.size( ); ++n ) {
+				switch( tag[n] ) {
+				case '"':
+					if( not is_escaped ) {
+						on_error( parse_template_error_types::unexpected_dbl_quote,
+						          tag,
+						          "Unexpected unescaped double-quote" );
+					}
+					in_quote = not in_quote;
+					continue;
+				case '\\':
+					is_escaped = not is_escaped;
+					continue;
+				case ',':
+					if( not in_quote ) {
+						results.emplace_back( &tag[last_pos], n - last_pos );
+						last_pos = n + 1;
+					}
+					continue;
+				}
+			}
+			if( last_pos < tag.size( ) ) {
+				results.emplace_back( &tag[last_pos], tag.size( ) - last_pos );
+			}
+			return results;
+		}
 
 		template<typename T>
 		struct actual_type {
@@ -239,7 +275,7 @@ namespace daw {
 		}
 
 		template<typename StateType, typename... ArgTypes, typename ErrorHandler, typename Callback>
-		DAW_ATTRIB_FLATINLINE constexpr auto make_stateful_callback( ErrorHandler &on_error,
+		DAW_ATTRIB_FLATINLINE constexpr auto make_stateful_callback( ErrorHandler const &on_error,
 		                                                             Callback &&callback ) {
 			using state_t = std::remove_reference_t<StateType>;
 			if constexpr( std::is_invocable_v<Callback,
@@ -281,7 +317,7 @@ namespace daw {
 			[[noreturn]] void operator( )( parse_template_error_types type,
 			                               daw::string_view /*data*/,
 			                               daw::string_view error_message ) const {
-				if( type == parse_template_error_types::callback_exception ) {
+				if( std::uncaught_exceptions() > 0 ) {
 					throw;
 				}
 				throw std::runtime_error( static_cast<std::string>( error_message ) );
@@ -311,15 +347,51 @@ namespace daw {
 		template<typename ErrorHandler>
 		raw_text_func( ErrorHandler const &, daw::string_view ) -> raw_text_func<ErrorHandler>;
 
-		daw::string_view find_args( daw::string_view tag );
-		std::vector<daw::string_view> find_split_args( daw::string_view tag );
+		constexpr size_t find_quote( daw::string_view str ) noexcept {
+			bool in_slash = false;
+			for( size_t n = 0; n < str.size( ); ++n ) {
+				if( str[n] == '\\' ) {
+					in_slash = true;
+					continue;
+				} else {
+					if( str[n] == '"' ) {
+						if( not in_slash ) {
+							return n;
+						}
+					}
+					in_slash = false;
+				}
+			}
+			return daw::string_view::npos;
+		}
 
+		template<typename ErrorHandler>
+		daw::string_view find_args( ErrorHandler const &on_error, daw::string_view tag ) {
+			using namespace daw::string_view_literals;
+			tag.remove_prefix_until( R"(args=")" );
+			if( tag.empty( ) ) {
+				return tag;
+			}
+			auto end_quote_pos = find_quote( tag );
+			if( end_quote_pos == daw::string_view::npos ) {
+				on_error( parse_template_error_types::missing_dbl_quote,
+				          tag,
+				          "Could not find end of call args" );
+			}
+			tag.resize( end_quote_pos );
+			return tag;
+		}
+
+		template<typename ErrorHandler>
 		class date_tag_func {
 			date::time_zone const *tz;
+			ErrorHandler const *on_error;
 
 		public:
-			explicit constexpr date_tag_func( date::time_zone const *timezone ) noexcept
-			  : tz( timezone ) {}
+			explicit constexpr date_tag_func( ErrorHandler const &eh,
+			                                  date::time_zone const *timezone ) noexcept
+			  : tz( timezone )
+			  , on_error( &eh ) {}
 
 			template<typename Writer>
 			void operator( )( Writer &writer ) const {
@@ -330,10 +402,14 @@ namespace daw {
 				ss << date::format( "%Y-%m-%d", current_time );
 				auto ret = writer.write( ss.str( ) );
 				if( ret.status != io::IOOpStatus::Ok ) {
-					throw std::runtime_error( "Error writing to output" );
+					( *on_error )( parse_template_error_types::io_error,
+					               ss.str( ),
+					               "Error writing to output" );
 				}
 			}
 		};
+		template<typename ErrorHandler>
+		date_tag_func( ErrorHandler const &, date::time_zone const * ) -> date_tag_func<ErrorHandler>;
 
 		template<typename ErrorHandler>
 		class ErrorWrapper {
@@ -350,11 +426,12 @@ namespace daw {
 			constexpr ErrorWrapper( ErrorHandler eh )
 			  : m_on_error( std::move( eh ) ) {}
 
-			DAW_ATTRIB_NOINLINE DAW_ATTRIB_FLATTEN constexpr void
+			DAW_ATTRIB_NOINLINE DAW_ATTRIB_FLATTEN [[noreturn]] constexpr void
 			operator( )( parse_template_error_types type,
 			             daw::string_view data,
 			             daw::string_view message ) const {
 				(void)m_on_error( type, data, message );
+				std::terminate( );
 			}
 		};
 	} // namespace parse_template_impl
@@ -433,7 +510,15 @@ namespace daw {
 			                                       void *state ) mutable {
 				  auto cb =
 				    parse_template_impl::make_callback<ArgTypes...>( m_on_error, callback, writer, state );
-				  daw::apply_string<ArgTypes...>( cb, str, "," );
+				  try {
+					  daw::apply_string<ArgTypes...>( cb, str, "," );
+				  } catch( std::exception const &ex ) {
+					  m_on_error( parse_template_error_types::parser_exception, str, ex.what( ) );
+				  } catch( ... ) {
+					  m_on_error( parse_template_error_types::parser_exception,
+					              str,
+					              "Exception while parsing" );
+				  }
 			  } );
 		}
 
@@ -450,12 +535,11 @@ namespace daw {
 
 		void process_timestamp_tag( string_view tag ) {
 			static char const default_ts_fmt[] = "%Y-%m-%dT%T%z";
-			auto args = parse_template_impl::find_split_args( tag );
+			auto args = parse_template_impl::find_split_args( m_on_error, tag );
 			if( args.size( ) > 2 ) {
 				m_on_error( parse_template_error_types::unexpected_arg_count,
 				            tag,
 				            "Unexpected argument count" );
-				return;
 			}
 
 			auto const ts_fmt = static_cast<std::string>( [&]( ) {
@@ -485,7 +569,6 @@ namespace daw {
 
 				if( ret.status != io::IOOpStatus::Ok ) {
 					m_on_error( parse_template_error_types::io_error, ss.str( ), "Error writing to output" );
-					return;
 				}
 			} );
 		}
@@ -495,8 +578,9 @@ namespace daw {
 			process_text( template_str.pop_front_until( "<%" ) );
 			while( not template_str.empty( ) ) {
 				auto item = template_str.pop_front_until( "%>" );
-				daw::exception::Assert( not template_str.empty( ), "Unexpected empty tag" );
-
+				if( template_str.empty( ) ) {
+					m_on_error( parse_template_error_types::empty_tag, template_str, "Unexpected empty tag" );
+				}
 				parse_tag( item );
 				process_text( template_str.pop_front_until( "<%" ) );
 			}
@@ -525,25 +609,22 @@ namespace daw {
 			}
 			if( tag.empty( ) ) {
 				m_on_error( parse_template_error_types::missing_tag, tag, "Empty tag" );
-				return;
 			}
 		}
 
 		void process_call_tag( daw::string_view tag ) {
 			using namespace daw::string_view_literals;
-			tag = parse_template_impl::find_args( tag );
+			tag = parse_template_impl::find_args( m_on_error, tag );
 			if( tag.empty( ) ) {
 				m_on_error( parse_template_error_types::missing_tag,
 				            tag.data( ),
 				            "Could not find start of call args" );
-				return;
 			}
 			auto callable_name = tag.pop_front_until( "," );
 			if( callable_name.empty( ) ) {
 				m_on_error( parse_template_error_types::missing_tag,
 				            callable_name.data( ),
 				            "Invalid call name, cannot be empty" );
-				return;
 			}
 
 			// This ensures that a lookup will always success when processing but the callback may not be
@@ -557,19 +638,17 @@ namespace daw {
 					  m_on_error( parse_template_error_types::unknown_function,
 					              callable_name.data( ),
 					              "Attempt to call an undefined function" );
-					  return;
 				  }
 				  cb( tag, writer, state );
 			  } );
 		}
 
 		void process_date_tag( daw::string_view str ) {
-			auto args = parse_template_impl::find_split_args( str );
+			auto args = parse_template_impl::find_split_args( m_on_error, str );
 			if( args.size( ) > 1 ) {
 				m_on_error( parse_template_error_types::unexpected_arg_count,
 				            str,
 				            "Unexpected argument count" );
-				return;
 			}
 			auto const tz = [&]( ) {
 				if( args.empty( ) or args[0].empty( ) ) {
@@ -577,16 +656,15 @@ namespace daw {
 				}
 				return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
 			}( );
-			m_doc_builder.emplace_back( parse_template_impl::date_tag_func( tz ) );
+			m_doc_builder.emplace_back( parse_template_impl::date_tag_func( m_on_error, tz ) );
 		}
 
 		void process_time_tag( daw::string_view str ) {
-			auto args = parse_template_impl::find_split_args( str );
+			auto args = parse_template_impl::find_split_args( m_on_error, str );
 			if( args.size( ) > 1 ) {
 				m_on_error( parse_template_error_types::unexpected_arg_count,
 				            str,
 				            "Unexpected argument count" );
-				return;
 			}
 			auto const tz = [&]( ) {
 				if( args.empty( ) or args[0].empty( ) ) {
@@ -604,7 +682,6 @@ namespace daw {
 				auto ret = writer.write( ss.str( ) );
 				if( ret.status != io::IOOpStatus::Ok ) {
 					m_on_error( parse_template_error_types::io_error, ss.str( ), "Error writing to output" );
-					return;
 				}
 			} );
 		}
