@@ -22,6 +22,7 @@
 
 #include <daw/daw_parse_template.h>
 #include <daw/io/daw_read_write.h>
+#include <daw/io/daw_type_writers.h>
 
 #include <date/date.h>
 #include <date/tz.h>
@@ -31,7 +32,9 @@
 #include <cstdlib>
 #include <ctime>
 #if defined( DAW_HAS_FMTLIB )
+#include <daw/io/daw_write_stream.h>
 #include <fmt/format.h>
+#include <fmt/ostream.h>
 #endif
 #include <iostream>
 
@@ -60,13 +63,10 @@ int main( int argc, char const **argv ) {
 	  "dummy_text_cb2",
 	  []( int a, int b, std::string str, daw::io::WriteProxy &writer ) {
 #if defined( DAW_HAS_FMTLIB )
-		  auto it = daw::io::write_iterator( writer );
-		  fmt::format_to( it, "From {} to {} we say {}", a, b, str );
+		  auto wo = daw::io::write_ostream( writer );
+		  fmt::print( wo, "From {} to {} we say {}", a, b, str );
 #else
-		  using std::to_string;
-		  using namespace std::literals;
-		  auto ret =
-		    writer.write( { "From ", to_string( a ), " to ", to_string( b ), " we say ", str } );
+		  auto ret = daw::io::type_writer::print( writer, "From {} to {} we say {}", a, b, str );
 		  if( ret.status != daw::io::IOOpStatus::Ok ) {
 			  std::terminate( );
 		  }

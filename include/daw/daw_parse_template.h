@@ -32,15 +32,31 @@
 #include <daw/io/daw_write_proxy.h>
 #include <daw/iterator/daw_output_stream_iterator.h>
 
+#include <date/date.h>
+#include <date/tz.h>
+#include <map>
 #include <string>
+#include <string_view>
 #include <type_traits>
-#include <unordered_map>
 #include <vector>
 
 namespace daw {
+	enum class parse_template_error_types {
+		none,
+		callback_exception,
+		empty_tag,
+		eof,
+		io_error,
+		missing_tag,
+		precondition_violation,
+		unexpected_arg_count,
+		unknown_function,
+		unknown_tag,
+	};
 	struct escaped_string {
 		explicit escaped_string( ) = default;
 	};
+
 	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> );
 
 	namespace parse_template_impl {
@@ -51,8 +67,9 @@ namespace daw {
 		template<typename T>
 		using StringViewConvertible =
 		  std::enable_if_t<daw::is_detected_v<detect_sv_conv, T>, std::nullptr_t>;
-	} // namespace parse_template_impl
-	namespace impl {
+
+		std::vector<daw::string_view> find_split_args( daw::string_view tag );
+
 		template<typename T>
 		struct actual_type {
 			using type = T;
@@ -67,7 +84,6 @@ namespace daw {
 		using actual_type_t = typename actual_type<T>::type;
 
 		std::string &to_string( std::string &str ) noexcept;
-
 		std::string to_string( std::string &&str ) noexcept;
 
 		template<typename ToStringFunc>
@@ -117,122 +133,253 @@ namespace daw {
 		template<typename StringRange>
 		constexpr size_t value_size_v = value_size_test<StringRange>( );
 
-		template<typename Callback, typename... Args>
-		constexpr void write_to_output_state( Callback &callback,
+		template<typename ErrorHandler, typename Callback, typename... Args>
+		constexpr void write_to_output_state( ErrorHandler const &on_error,
+		                                      Callback &callback,
 		                                      daw::io::WriteProxy &writer,
 		                                      void *state,
 		                                      Args &&...args ) {
 			auto wret = daw::io::IOOpResult{ };
 			using result_t = std::invoke_result_t<Callback, Args..., void *>;
-			if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
-				wret = writer.write( callback( DAW_FWD( args )..., state ) );
-			} else if constexpr( daw::io::type_writer::has_type_writer_v<result_t> ) {
-				wret = daw::io::type_writer::type_writer( writer, callback( DAW_FWD( args )..., state ) );
-			} else {
-				using daw::impl::to_string;
-				using std::to_string;
-				auto cb_res = callback( DAW_FWD( args )..., state );
-				wret = writer.write( to_string( cb_res ) );
+			try {
+				if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
+					wret = writer.write( callback( DAW_FWD( args )..., state ) );
+				} else if constexpr( daw::io::type_writer::has_type_writer_v<result_t> ) {
+					wret = daw::io::type_writer::type_writer( writer, callback( DAW_FWD( args )..., state ) );
+				} else {
+					using parse_template_impl::to_string;
+					using std::to_string;
+					auto cb_res = callback( DAW_FWD( args )..., state );
+					wret = writer.write( to_string( cb_res ) );
+				}
+			} catch( std::exception &ex ) {
+				on_error( daw::parse_template_error_types::callback_exception, { }, ex.what( ) );
+			} catch( ... ) {
+				on_error( daw::parse_template_error_types::callback_exception,
+				          { },
+				          "Exception while calling callback" );
 			}
 			if( DAW_UNLIKELY( wret.status != daw::io::IOOpStatus::Ok ) ) {
-				daw::exception::daw_throw( "Error writing to output" );
+				if( wret.status == io::IOOpStatus::Eof ) {
+					on_error( daw::parse_template_error_types::io_error,
+					          { },
+					          "End of file while writing. " + std::to_string( wret.count ) +
+					            " bytes written" );
+				}
 			}
 		}
 
-		template<typename Callback, typename... Args>
-		constexpr void
-		write_to_output_nostate( Callback &callback, daw::io::WriteProxy &writer, Args &&...args ) {
+		template<typename ErrorHandler, typename Callback, typename... Args>
+		constexpr void write_to_output_nostate( ErrorHandler const &on_error,
+		                                        Callback &callback,
+		                                        daw::io::WriteProxy &writer,
+		                                        Args &&...args ) {
 			auto wret = daw::io::IOOpResult{ };
 			using result_t = std::invoke_result_t<Callback, Args...>;
-			if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
-				wret = writer.write( callback( DAW_FWD( args )... ) );
-			} else if constexpr( daw::io::type_writer::has_type_writer_v<result_t> ) {
-				wret = daw::io::type_writer::type_writer( writer, callback( DAW_FWD( args )... ) );
-			} else {
-				using daw::impl::to_string;
-				using std::to_string;
-				auto cb_res = callback( DAW_FWD( args )... );
-				wret = writer.write( to_string( cb_res ) );
+			try {
+				if constexpr( daw::traits::is_string_view_like_v<result_t> ) {
+					wret = writer.write( callback( DAW_FWD( args )... ) );
+				} else if constexpr( daw::io::type_writer::has_type_writer_v<result_t> ) {
+					wret = daw::io::type_writer::type_writer( writer, callback( DAW_FWD( args )... ) );
+				} else {
+					using parse_template_impl::to_string;
+					using std::to_string;
+					auto cb_res = callback( DAW_FWD( args )... );
+					wret = writer.write( to_string( cb_res ) );
+				}
+			} catch( std::exception &ex ) {
+				on_error( daw::parse_template_error_types::callback_exception, { }, ex.what( ) );
+			} catch( ... ) {
+				on_error( daw::parse_template_error_types::callback_exception,
+				          { },
+				          "Exception while calling callback" );
 			}
 			if( DAW_UNLIKELY( wret.status != daw::io::IOOpStatus::Ok ) ) {
-				daw::exception::daw_throw( "Error writing to output" );
+				if( wret.status == io::IOOpStatus::Eof ) {
+					on_error( daw::parse_template_error_types::io_error,
+					          { },
+					          "End of file while writing. " + std::to_string( wret.count ) +
+					            " bytes written" );
+				}
 			}
 		}
 
-		template<typename... ArgTypes, typename Callback>
-		constexpr auto make_callback( Callback &callback, daw::io::WriteProxy &writer, void *state ) {
+		template<typename... ArgTypes, typename ErrorHandler, typename Callback>
+		DAW_ATTRIB_FLATINLINE constexpr auto make_callback( ErrorHandler const &on_error,
+		                                                    Callback &callback,
+		                                                    daw::io::WriteProxy &writer,
+		                                                    void *state ) {
 			if constexpr( std::is_invocable_v<Callback,
-			                                  impl::actual_type_t<ArgTypes>...,
+			                                  parse_template_impl::actual_type_t<ArgTypes>...,
 			                                  daw::io::WriteProxy &,
 			                                  void *> ) {
-				return [&, state]( impl::actual_type_t<ArgTypes>... args ) mutable {
+				return [&, state]( parse_template_impl::actual_type_t<ArgTypes>... args ) mutable {
 					(void)callback( DAW_FWD( args )..., writer, state );
 				};
 			} else if constexpr( std::is_invocable_v<Callback,
-			                                         impl::actual_type_t<ArgTypes>...,
+			                                         parse_template_impl::actual_type_t<ArgTypes>...,
 			                                         daw::io::WriteProxy &> ) {
-				return [&]( impl::actual_type_t<ArgTypes>... args ) mutable {
+				return [&]( parse_template_impl::actual_type_t<ArgTypes>... args ) mutable {
 					(void)callback( DAW_FWD( args )..., writer );
 				};
-			} else if constexpr( std::
-			                       is_invocable_v<Callback, impl::actual_type_t<ArgTypes>..., void *> ) {
-				return [&, state]( impl::actual_type_t<ArgTypes>... args ) mutable {
-					write_to_output_state( callback, writer, state, DAW_FWD( args )... );
+			} else if constexpr( std::is_invocable_v<Callback,
+			                                         parse_template_impl::actual_type_t<ArgTypes>...,
+			                                         void *> ) {
+				return [&, state]( parse_template_impl::actual_type_t<ArgTypes>... args ) mutable {
+					write_to_output_state( on_error, callback, writer, state, DAW_FWD( args )... );
 				};
 			} else {
-				static_assert( std::is_invocable_v<Callback, impl::actual_type_t<ArgTypes>...>,
-				               "Unsupported callback" );
-				return [&]( impl::actual_type_t<ArgTypes>... args ) mutable {
-					write_to_output_nostate( callback, writer, DAW_FWD( args )... );
+				static_assert(
+				  std::is_invocable_v<Callback, parse_template_impl::actual_type_t<ArgTypes>...>,
+				  "Unsupported callback" );
+				return [&]( parse_template_impl::actual_type_t<ArgTypes>... args ) mutable {
+					write_to_output_nostate( on_error, callback, writer, DAW_FWD( args )... );
 				};
 			}
 		}
 
-		template<typename StateType, typename... ArgTypes, typename Callback>
-		auto make_stateful_callback( Callback &&callback ) {
+		template<typename StateType, typename... ArgTypes, typename ErrorHandler, typename Callback>
+		DAW_ATTRIB_FLATINLINE constexpr auto make_stateful_callback( ErrorHandler &on_error,
+		                                                             Callback &&callback ) {
 			using state_t = std::remove_reference_t<StateType>;
 			if constexpr( std::is_invocable_v<Callback,
 			                                  actual_type_t<ArgTypes>...,
 			                                  daw::io::WriteProxy &,
 			                                  state_t &> ) {
-				return [callback = DAW_FWD(
-				          callback )]( auto &&...args, daw::io::WriteProxy &writer, void *state ) mutable {
+				return [&, callback = DAW_FWD( callback )]( auto &&...args,
+				                                            daw::io::WriteProxy &writer,
+				                                            void *state ) mutable {
 					if( not state ) {
-						daw::exception::daw_throw(
-						  "Stateful function expects state param on write_to/to_string call" );
+						on_error( parse_template_error_types::unknown_tag,
+						          daw::string_view{ },
+						          "Stateful function expects state param on write_to/to_string call" );
+						std::terminate( );
 					}
 					return callback( DAW_FWD( args )..., writer, *reinterpret_cast<state_t *>( state ) );
 				};
 			} else {
 				static_assert( std::is_invocable_v<Callback, actual_type_t<ArgTypes>..., state_t &> );
-				return [callback = DAW_FWD( callback )]( auto &&...args, void *state ) mutable {
+				return [&, callback = DAW_FWD( callback )]( auto &&...args, void *state ) mutable {
 					if( not state ) {
-						daw::exception::daw_throw(
-						  "Stateful function expects state param on write_to/to_string call" );
+						on_error( parse_template_error_types::unknown_tag,
+						          daw::string_view{ },
+						          "Stateful function expects state param on write_to/to_string call" );
+						std::terminate( );
 					}
 					return callback( DAW_FWD( args )..., *reinterpret_cast<state_t *>( state ) );
 				};
 			}
 		}
-	} // namespace impl
 
+		DAW_ATTRIB_INLINE constexpr void remove_leading_whitespace( daw::string_view &sv ) noexcept {
+			sv.remove_prefix_while( []( char c ) { return daw::parser::is_unicode_whitespace( c ); } );
+		}
+
+		struct default_error_handler_t {
+			explicit default_error_handler_t( ) = default;
+
+			[[noreturn]] void operator( )( parse_template_error_types type,
+			                               daw::string_view /*data*/,
+			                               daw::string_view error_message ) const {
+				if( type == parse_template_error_types::callback_exception ) {
+					throw;
+				}
+				throw std::runtime_error( static_cast<std::string>( error_message ) );
+			}
+		};
+
+		template<typename Key, typename T, typename Allocator = std::allocator<std::pair<Key const, T>>>
+		using heterogenous_lookup_map_t = std::map<Key, T, std::less<>, Allocator>;
+
+		template<typename ErrorHandler>
+		struct raw_text_func {
+			daw::string_view str;
+			ErrorHandler const *on_error;
+
+			explicit constexpr raw_text_func( ErrorHandler const &error_handler, daw::string_view sv )
+			  : str( sv )
+			  , on_error( &error_handler ) {}
+
+			template<typename Writer>
+			constexpr void operator( )( Writer &writer ) const {
+				auto ret = writer.write( str );
+				if( ret.status != io::IOOpStatus::Ok ) {
+					( *on_error )( parse_template_error_types::io_error, str, "Error writing to output" );
+				}
+			}
+		};
+		template<typename ErrorHandler>
+		raw_text_func( ErrorHandler const &, daw::string_view ) -> raw_text_func<ErrorHandler>;
+
+		daw::string_view find_args( daw::string_view tag );
+		std::vector<daw::string_view> find_split_args( daw::string_view tag );
+
+		class date_tag_func {
+			date::time_zone const *tz;
+
+		public:
+			explicit constexpr date_tag_func( date::time_zone const *timezone ) noexcept
+			  : tz( timezone ) {}
+
+			template<typename Writer>
+			void operator( )( Writer &writer ) const {
+				using namespace date;
+				using namespace std::chrono;
+				std::stringstream ss{ };
+				auto const current_time = date::make_zoned( tz, std::chrono::system_clock::now( ) );
+				ss << date::format( "%Y-%m-%d", current_time );
+				auto ret = writer.write( ss.str( ) );
+				if( ret.status != io::IOOpStatus::Ok ) {
+					throw std::runtime_error( "Error writing to output" );
+				}
+			}
+		};
+
+		template<typename ErrorHandler>
+		class ErrorWrapper {
+			static_assert( std::is_invocable_v<ErrorHandler,
+			                                   parse_template_error_types,
+			                                   daw::string_view,
+			                                   daw::string_view>,
+			               "ErrorHandler does not work with required parameters" );
+
+			DAW_NO_UNIQUE_ADDRESS ErrorHandler m_on_error{ };
+
+		public:
+			explicit ErrorWrapper( ) = default;
+			constexpr ErrorWrapper( ErrorHandler eh )
+			  : m_on_error( std::move( eh ) ) {}
+
+			DAW_ATTRIB_NOINLINE DAW_ATTRIB_FLATTEN constexpr void
+			operator( )( parse_template_error_types type,
+			             daw::string_view data,
+			             daw::string_view message ) const {
+				(void)m_on_error( type, data, message );
+			}
+		};
+	} // namespace parse_template_impl
+	  //*****************************************************************
+
+	template<typename ErrorHandler = parse_template_impl::default_error_handler_t>
 	class parse_template {
-		std::vector<impl::doc_parts> m_doc_builder;
-		std::unordered_map<std::string,
-		                   std::function<void( daw::string_view, daw::io::WriteProxy &, void * )>>
-		  m_callbacks;
+		using callback_map_t = parse_template_impl::heterogenous_lookup_map_t<
+		  std::string,
+		  std::function<void( daw::string_view, daw::io::WriteProxy &, void * )>>;
 
-		void process_template( daw::string_view template_str );
-		void parse_tag( daw::string_view tag );
-		void process_call_tag( daw::string_view tag );
-		void process_date_tag( daw::string_view tag );
-		void process_time_tag( daw::string_view tag );
-		void process_text( string_view str );
-
-		void write_to_impl( daw::io::WriteProxy &writable, void *state );
+		DAW_NO_UNIQUE_ADDRESS parse_template_impl::ErrorWrapper<ErrorHandler> m_on_error{ };
+		std::vector<parse_template_impl::doc_parts> m_doc_builder{ };
+		callback_map_t m_callbacks{ };
 
 	public:
-		explicit parse_template( daw::string_view template_string );
+		explicit parse_template( daw::string_view template_string ) {
+			process_template( template_string );
+		}
+
+		explicit parse_template( daw::string_view template_string, ErrorHandler on_error )
+		  : m_on_error( std::move( on_error ) ) {
+
+			process_template( template_string );
+		}
 
 		template<typename Writable>
 		void write_to( Writable &wr ) {
@@ -279,14 +426,15 @@ namespace daw {
 
 		template<typename... ArgTypes, typename Callback>
 		void add_callback( daw::string_view name, Callback &&callback ) {
-			m_callbacks.insert_or_assign( static_cast<std::string>( name ),
-			                              [callback = DAW_FWD( callback )]( daw::string_view str,
-			                                                                daw::io::WriteProxy &writer,
-			                                                                void *state ) mutable {
-				                              auto cb =
-				                                impl::make_callback<ArgTypes...>( callback, writer, state );
-				                              daw::apply_string<ArgTypes...>( cb, str, "," );
-			                              } );
+			m_callbacks.insert_or_assign(
+			  static_cast<std::string>( name ),
+			  [&, callback = DAW_FWD( callback )]( daw::string_view str,
+			                                       daw::io::WriteProxy &writer,
+			                                       void *state ) mutable {
+				  auto cb =
+				    parse_template_impl::make_callback<ArgTypes...>( m_on_error, callback, writer, state );
+				  daw::apply_string<ArgTypes...>( cb, str, "," );
+			  } );
 		}
 
 		template<typename StateType, typename... ArgTypes, typename Callback>
@@ -295,10 +443,181 @@ namespace daw {
 			               "Only mutable state is supported" );
 			return add_callback<ArgTypes...>(
 			  name,
-			  impl::make_stateful_callback<StateType, ArgTypes...>( DAW_FWD( callback ) ) );
+			  parse_template_impl::make_stateful_callback<StateType, ArgTypes...>(
+			    m_on_error,
+			    DAW_FWD( callback ) ) );
 		}
 
-		void process_timestamp_tag( string_view tag );
+		void process_timestamp_tag( string_view tag ) {
+			static char const default_ts_fmt[] = "%Y-%m-%dT%T%z";
+			auto args = parse_template_impl::find_split_args( tag );
+			if( args.size( ) > 2 ) {
+				m_on_error( parse_template_error_types::unexpected_arg_count,
+				            tag,
+				            "Unexpected argument count" );
+				return;
+			}
+
+			auto const ts_fmt = static_cast<std::string>( [&]( ) {
+				if( args.empty( ) or args[0].empty( ) ) {
+					return daw::string_view{ default_ts_fmt };
+				}
+				return args[0];
+			}( ) );
+
+			auto const tz = [&]( ) {
+				if( args.size( ) < 2 or args[1].empty( ) ) {
+					return date::current_zone( );
+				}
+				return date::locate_zone( static_cast<std::string_view>( args[1] ) );
+			}( );
+
+			m_doc_builder.emplace_back( [&, ts_fmt, tz]( daw::io::WriteProxy &writer ) {
+				using namespace date;
+				using namespace std::chrono;
+
+				std::stringstream ss{ };
+
+				auto current_time = make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
+				ss << format( ts_fmt, current_time );
+
+				auto ret = writer.write( ss.str( ) );
+
+				if( ret.status != io::IOOpStatus::Ok ) {
+					m_on_error( parse_template_error_types::io_error, ss.str( ), "Error writing to output" );
+					return;
+				}
+			} );
+		}
+
+	private:
+		void process_template( daw::string_view template_str ) {
+			process_text( template_str.pop_front_until( "<%" ) );
+			while( not template_str.empty( ) ) {
+				auto item = template_str.pop_front_until( "%>" );
+				daw::exception::Assert( not template_str.empty( ), "Unexpected empty tag" );
+
+				parse_tag( item );
+				process_text( template_str.pop_front_until( "<%" ) );
+			}
+		}
+
+		void parse_tag( daw::string_view tag ) {
+			using namespace daw::string_view_literals;
+
+			parse_template_impl::remove_leading_whitespace( tag );
+
+			if( tag.starts_with( "call" ) ) {
+				tag.remove_prefix( "call"_sv.size( ) );
+				return process_call_tag( tag );
+			}
+			if( tag.starts_with( "date" ) ) {
+				tag.remove_prefix( "date"_sv.size( ) );
+				return process_date_tag( tag );
+			}
+			if( tag.starts_with( "time" ) ) {
+				if( tag.starts_with( "timestamp" ) ) {
+					tag.remove_prefix( "timestamp"_sv.size( ) );
+					return process_timestamp_tag( tag );
+				}
+				tag.remove_prefix( ( "time"_sv.size( ) ) );
+				return process_time_tag( tag );
+			}
+			if( tag.empty( ) ) {
+				m_on_error( parse_template_error_types::missing_tag, tag, "Empty tag" );
+				return;
+			}
+		}
+
+		void process_call_tag( daw::string_view tag ) {
+			using namespace daw::string_view_literals;
+			tag = parse_template_impl::find_args( tag );
+			if( tag.empty( ) ) {
+				m_on_error( parse_template_error_types::missing_tag,
+				            tag.data( ),
+				            "Could not find start of call args" );
+				return;
+			}
+			auto callable_name = tag.pop_front_until( "," );
+			if( callable_name.empty( ) ) {
+				m_on_error( parse_template_error_types::missing_tag,
+				            callable_name.data( ),
+				            "Invalid call name, cannot be empty" );
+				return;
+			}
+
+			// This ensures that a lookup will always success when processing but the callback may not be
+			// set
+			m_callbacks[static_cast<std::string>( callable_name )] = nullptr;
+
+			m_doc_builder.emplace_back(
+			  [callable_name, tag, this]( daw::io::WriteProxy &writer, void *state ) {
+				  auto &cb = m_callbacks.find( callable_name )->second;
+				  if( not cb ) {
+					  m_on_error( parse_template_error_types::unknown_function,
+					              callable_name.data( ),
+					              "Attempt to call an undefined function" );
+					  return;
+				  }
+				  cb( tag, writer, state );
+			  } );
+		}
+
+		void process_date_tag( daw::string_view str ) {
+			auto args = parse_template_impl::find_split_args( str );
+			if( args.size( ) > 1 ) {
+				m_on_error( parse_template_error_types::unexpected_arg_count,
+				            str,
+				            "Unexpected argument count" );
+				return;
+			}
+			auto const tz = [&]( ) {
+				if( args.empty( ) or args[0].empty( ) ) {
+					return date::current_zone( );
+				}
+				return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
+			}( );
+			m_doc_builder.emplace_back( parse_template_impl::date_tag_func( tz ) );
+		}
+
+		void process_time_tag( daw::string_view str ) {
+			auto args = parse_template_impl::find_split_args( str );
+			if( args.size( ) > 1 ) {
+				m_on_error( parse_template_error_types::unexpected_arg_count,
+				            str,
+				            "Unexpected argument count" );
+				return;
+			}
+			auto const tz = [&]( ) {
+				if( args.empty( ) or args[0].empty( ) ) {
+					return date::current_zone( );
+				}
+				return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
+			}( );
+			m_doc_builder.emplace_back( [&, tz]( daw::io::WriteProxy &writer ) {
+				using namespace date;
+				using namespace std::chrono;
+				std::stringstream ss{ };
+				auto const current_time =
+				  date::make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
+				ss << date::format( "%T", current_time );
+				auto ret = writer.write( ss.str( ) );
+				if( ret.status != io::IOOpStatus::Ok ) {
+					m_on_error( parse_template_error_types::io_error, ss.str( ), "Error writing to output" );
+					return;
+				}
+			} );
+		}
+
+		void process_text( daw::string_view str ) {
+			m_doc_builder.emplace_back( parse_template_impl::raw_text_func( m_on_error, str ) );
+		}
+
+		void write_to_impl( daw::io::WriteProxy &writable, void *state ) {
+			for( auto const &part : m_doc_builder ) {
+				part( writable, state );
+			}
+		}
 	}; // class parse_template
 
 } // namespace daw

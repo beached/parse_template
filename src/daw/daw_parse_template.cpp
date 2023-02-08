@@ -25,68 +25,7 @@
 #include <daw/daw_string_view.h>
 #include <daw/io/daw_write_proxy.h>
 
-#include <date/date.h>
-#include <date/tz.h>
-
-namespace daw {
-	void parse_template::process_text( daw::string_view str ) {
-		struct raw_text_func {
-			daw::string_view str;
-
-			explicit constexpr raw_text_func( daw::string_view sv )
-			  : str( sv ) {}
-
-			void operator( )( daw::io::WriteProxy &writer ) const {
-				auto ret = writer.write( str );
-				if( ret.status != io::IOOpStatus::Ok ) {
-					daw::exception::daw_throw( "Error writing to output" );
-				}
-			}
-		};
-		m_doc_builder.emplace_back( raw_text_func{ str } );
-	}
-
-	void parse_template::process_template( daw::string_view template_str ) {
-		process_text( template_str.pop_front_until( "<%" ) );
-		while( not template_str.empty( ) ) {
-			auto item = template_str.pop_front_until( "%>" );
-			daw::exception::Assert( not template_str.empty( ), "Unexpected empty tag" );
-
-			parse_tag( item );
-			process_text( template_str.pop_front_until( "<%" ) );
-		}
-	}
-
-	namespace {
-		constexpr void remove_leading_whitespace( daw::string_view &sv ) noexcept {
-			sv.remove_prefix_while( []( char c ) { return daw::parser::is_unicode_whitespace( c ); } );
-		}
-	} // namespace
-
-	void parse_template::parse_tag( daw::string_view tag ) {
-		using namespace daw::string_view_literals;
-
-		remove_leading_whitespace( tag );
-
-		if( tag.starts_with( "call" ) ) {
-			tag.remove_prefix( "call"_sv.size( ) );
-			return process_call_tag( tag );
-		}
-		if( tag.starts_with( "date" ) ) {
-			tag.remove_prefix( "date"_sv.size( ) );
-			return process_date_tag( tag );
-		}
-		if( tag.starts_with( "time" ) ) {
-			if( tag.starts_with( "timestamp" ) ) {
-				tag.remove_prefix( "timestamp"_sv.size( ) );
-				return process_timestamp_tag( tag );
-			}
-			tag.remove_prefix( ( "time"_sv.size( ) ) );
-			return process_time_tag( tag );
-		}
-		daw::exception::daw_throw( "Unknown or empty tag type" );
-	}
-
+namespace daw::parse_template_impl {
 	namespace {
 		constexpr size_t find_quote( daw::string_view str ) noexcept {
 			bool in_slash = false;
@@ -105,208 +44,97 @@ namespace daw {
 			}
 			return daw::string_view::npos;
 		}
+	} // namespace
 
-		constexpr daw::string_view find_args( daw::string_view tag ) {
-			using namespace daw::string_view_literals;
-			tag.remove_prefix_until( R"(args=")" );
-			if( tag.empty( ) ) {
-				return tag;
-			}
-			auto end_quote_pos = find_quote( tag );
-			daw::exception::daw_throw_on_true( end_quote_pos == daw::string_view::npos,
-			                                   "Could not find end of call args" );
-			tag.resize( end_quote_pos );
+	daw::string_view find_args( daw::string_view tag ) {
+		using namespace daw::string_view_literals;
+		tag.remove_prefix_until( R"(args=")" );
+		if( tag.empty( ) ) {
 			return tag;
 		}
-
-		std::vector<daw::string_view> find_split_args( daw::string_view tag ) {
-			tag = find_args( tag );
-			std::vector<daw::string_view> results{ };
-			bool in_quote = false;
-			bool is_escaped = false;
-			size_t last_pos = 0;
-			for( size_t n = 0; n < tag.size( ); ++n ) {
-				switch( tag[n] ) {
-				case '"':
-					daw::exception::daw_throw_on_true( not is_escaped, "Unexpected unescaped double-quote" );
-					in_quote = not in_quote;
-					continue;
-				case '\\':
-					is_escaped = not is_escaped;
-					continue;
-				case ',':
-					if( not in_quote ) {
-						results.emplace_back( &tag[last_pos], n - last_pos );
-						last_pos = n + 1;
-					}
-					continue;
-				}
-			}
-			if( last_pos < tag.size( ) ) {
-				results.emplace_back( &tag[last_pos], tag.size( ) - last_pos );
-			}
-			return results;
+		auto end_quote_pos = find_quote( tag );
+		if( end_quote_pos == daw::string_view::npos ) {
+			throw std::runtime_error( "Could not find end of call args" );
 		}
-	} // namespace
-	void parse_template::process_call_tag( daw::string_view tag ) {
-		using namespace daw::string_view_literals;
+		tag.resize( end_quote_pos );
+		return tag;
+	}
+
+	std::vector<daw::string_view> find_split_args( daw::string_view tag ) {
 		tag = find_args( tag );
-		daw::exception::daw_throw_on_true( tag.empty( ), "Could not find start of call args" );
-		auto callable_name = tag.pop_front_until( "," );
-		daw::exception::daw_throw_on_true( callable_name.empty( ),
-		                                   "Invalid call name, cannot be empty" );
-
-		m_callbacks[static_cast<std::string>( callable_name )] = nullptr;
-
-		m_doc_builder.emplace_back(
-		  [callable_name, tag, this]( daw::io::WriteProxy &writer, void *state ) {
-			  auto pos = m_callbacks.find( static_cast<std::string>( callable_name ) );
-			  daw::exception::daw_throw_on_true( pos == m_callbacks.end( ),
-			                                     "Attempt to call an undefined function" );
-			  auto &cb = pos->second;
-			  cb( tag, writer, state );
-		  } );
-	}
-
-	void parse_template::process_date_tag( daw::string_view str ) {
-		auto args = find_split_args( str );
-		daw::exception::daw_throw_on_false( args.size( ) <= 1, "Unexpected argument count" );
-		auto const tz = [&]( ) {
-			if( args.empty( ) || args[0].empty( ) ) {
-				return date::current_zone( );
+		std::vector<daw::string_view> results{ };
+		bool in_quote = false;
+		bool is_escaped = false;
+		size_t last_pos = 0;
+		for( size_t n = 0; n < tag.size( ); ++n ) {
+			switch( tag[n] ) {
+			case '"':
+				if( not is_escaped ) {
+					throw std::runtime_error( "Unexpected unescaped double-quote" );
+				}
+				in_quote = not in_quote;
+				continue;
+			case '\\':
+				is_escaped = not is_escaped;
+				continue;
+			case ',':
+				if( not in_quote ) {
+					results.emplace_back( &tag[last_pos], n - last_pos );
+					last_pos = n + 1;
+				}
+				continue;
 			}
-			return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
-		}( );
-
-		m_doc_builder.emplace_back( [tz]( daw::io::WriteProxy &writer ) {
-			using namespace date;
-			using namespace std::chrono;
-			std::stringstream ss{ };
-			auto const current_time = date::make_zoned( tz, std::chrono::system_clock::now( ) );
-			ss << date::format( "%Y-%m-%d", current_time );
-			auto ret = writer.write( ss.str( ) );
-			if( ret.status != io::IOOpStatus::Ok ) {
-				daw::exception::daw_throw( "Error writing to output" );
-			}
-		} );
-	}
-
-	void parse_template::process_time_tag( daw::string_view str ) {
-		auto args = find_split_args( str );
-		daw::exception::daw_throw_on_false( args.size( ) <= 1, "Unexpected argument count" );
-		auto const tz = [&]( ) {
-			if( args.empty( ) || args[0].empty( ) ) {
-				return date::current_zone( );
-			}
-			return date::locate_zone( static_cast<std::string>( args[0] ).c_str( ) );
-		}( );
-		m_doc_builder.emplace_back( [tz]( daw::io::WriteProxy &writer ) {
-			using namespace date;
-			using namespace std::chrono;
-			std::stringstream ss{ };
-			auto const current_time =
-			  date::make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
-			ss << date::format( "%T", current_time );
-			auto ret = writer.write( ss.str( ) );
-			if( ret.status != io::IOOpStatus::Ok ) {
-				daw::exception::daw_throw( "Error writing to output" );
-			}
-		} );
-	}
-
-	void parse_template::process_timestamp_tag( daw::string_view str ) {
-		static char const default_ts_fmt[] = "%Y-%m-%dT%T%z";
-		auto args = find_split_args( str );
-		daw::exception::daw_throw_on_false( args.size( ) <= 2, "Unexpected argument count" );
-
-		std::string const ts_fmt = static_cast<std::string>( [&]( ) {
-			if( args.empty( ) || args[0].empty( ) ) {
-				return daw::string_view{ default_ts_fmt };
-			}
-			return args[0];
-		}( ) );
-
-		auto const tz = [&]( ) {
-			if( args.size( ) < 2 || args[1].empty( ) ) {
-				return date::current_zone( );
-			}
-			return date::locate_zone( static_cast<std::string>( args[1] ).c_str( ) );
-		}( );
-
-		m_doc_builder.emplace_back( [ts_fmt, tz]( daw::io::WriteProxy &writer ) {
-			using namespace date;
-			using namespace std::chrono;
-
-			std::stringstream ss{ };
-
-			auto current_time = make_zoned( tz, floor<seconds>( std::chrono::system_clock::now( ) ) );
-			ss << format( ts_fmt, current_time );
-
-			auto ret = writer.write( ss.str( ) );
-
-			if( ret.status != io::IOOpStatus::Ok ) {
-				daw::exception::daw_throw( "Error writing to output" );
-			}
-		} );
-	}
-
-	void parse_template::write_to_impl( daw::io::WriteProxy &writable, void *state ) {
-		for( auto const &part : m_doc_builder ) {
-			part( writable, state );
 		}
+		if( last_pos < tag.size( ) ) {
+			results.emplace_back( &tag[last_pos], tag.size( ) - last_pos );
+		}
+		return results;
 	}
 
-
-	parse_template::parse_template( daw::string_view template_string )
-	  : m_doc_builder( )
-	  , m_callbacks( ) {
-
-		process_template( template_string );
-	}
-
-	std::string &impl::to_string( std::string &str ) noexcept {
+	std::string &to_string( std::string &str ) noexcept {
 		return str;
 	}
 
-	std::string impl::to_string( std::string &&str ) noexcept {
+	std::string to_string( std::string &&str ) noexcept {
 		return std::move( str );
 	}
 
-	void impl::doc_parts::operator( )( daw::io::WriteProxy &writer, void *state ) const {
+	void parse_template_impl::doc_parts::operator( )( daw::io::WriteProxy &writer,
+	                                                  void *state ) const {
 		m_to_string( writer, state );
 	}
 
-	namespace {
-		constexpr char unescape( char c ) noexcept {
-			switch( c ) {
-			case 'a':
-				return '\a';
-			case 'b':
-				return '\b';
-			case 'f':
-				return '\f';
-			case 'n':
-				return '\n';
-			case 'r':
-				return '\r';
-			case 't':
-				return '\t';
-			case 'v':
-				return '\v';
-			default:
-				return c;
-			}
+	constexpr char unescape( char c ) noexcept {
+		switch( c ) {
+		case 'a':
+			return '\a';
+		case 'b':
+			return '\b';
+		case 'f':
+			return '\f';
+		case 'n':
+			return '\n';
+		case 'r':
+			return '\r';
+		case 't':
+			return '\t';
+		case 'v':
+			return '\v';
+		default:
+			return c;
 		}
+	}
 
-		std::string trim_quotes( daw::string_view str ) {
-			if( str.size( ) >= 2 and str.front( ) == '"' and str.back( ) == '"' ) {
-				str.remove_prefix( );
-				str.remove_suffix( );
-			}
-			return static_cast<std::string>( str );
+	std::string trim_quotes( daw::string_view str ) {
+		if( str.size( ) >= 2 and str.front( ) == '"' and str.back( ) == '"' ) {
+			str.remove_prefix( );
+			str.remove_suffix( );
 		}
-	} // namespace
+		return static_cast<std::string>( str );
+	}
+} // namespace daw::parse_template_impl
 
+namespace daw {
 	std::string parse_to_value( daw::string_view str, daw::tag_t<escaped_string> ) {
 		auto result = std::string( );
 		bool in_escape = false;
@@ -315,14 +143,14 @@ namespace daw {
 			auto const item = str.pop_front( );
 			if( in_escape ) {
 				in_escape = false;
-				result += daw::unescape( item );
+				result += parse_template_impl::unescape( item );
 			} else if( item == '\\' ) {
 				in_escape = true;
 			} else {
 				result += item;
 			}
 		}
-		return daw::trim_quotes( result );
+		return parse_template_impl::trim_quotes( result );
 	}
 
 } // namespace daw
